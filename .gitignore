@@ -1,0 +1,21 @@
+# Secrets and Env variables
+.env
+.env.*
+secrets.json
+*.pem
+*.key
+
+# Data and Cache
+data/
+DataSets/
+DataSets.zip
+__pycache__/
+*.pyc
+.pytest_cache/
+.claude/
+
+# IDE and OS
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
