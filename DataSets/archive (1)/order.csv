@@ -1,0 +1,1001 @@
+OrderID,CustomerID,OrderDate,OrderStatus,ShippedDate,ShipAddress,,,,ShipCountry,ShippingFee,PaymentMethod,TotalAmount
+1,1,2/16/2012,pending,7/10/2021,30249 Donald Way,,,,China,63.95,cash on delivery,1568.28
+2,2,2/6/2012,processing,6/23/2014,97 David Street,,,,Greece,75.62,cash on delivery,4654.31
+3,3,1/2/2013,pending,10/22/2022,2024 Myrtle Parkway,,,,Poland,453.17,PayPal,5810.01
+4,4,2/28/2013,pending,11/22/2011,75158 Merry Plaza,,,,Japan,883.25,PayPal,4388.28
+5,5,8/28/2014,delivered,8/16/2017,875 Nancy Hill,,,,Portugal,881.14,credit card,2972.23
+6,6,5/25/2022,delivered,3/29/2012,7556 Chinook Street,,,,China,49.42,PayPal,9545.46
+7,7,10/19/2020,processing,9/6/2022,38 Brown Parkway,,,,Czech Republic,193.55,cash on delivery,4187.61
+8,8,6/27/2021,delivered,8/28/2018,601 Bluejay Alley,,,,China,9.25,PayPal,5088.06
+9,9,2/18/2010,processing,9/25/2013,69 Dunning Terrace,,,,China,568.47,cash on delivery,5967.51
+10,10,5/5/2019,pending,6/9/2015,25 Rigney Drive,,,,Colombia,73.32,credit card,2169.93
+11,11,5/23/2010,shipped,7/17/2020,118 Gateway Crossing,,,,Vietnam,870.05,cash on delivery,1535.43
+12,12,5/21/2010,shipped,7/9/2017,33 Fisk Terrace,,,,Finland,788.77,cash on delivery,9779.08
+13,13,3/14/2010,processing,3/7/2013,84 Hazelcrest Circle,,,,China,688.15,credit card,4142.2
+14,14,9/23/2011,delivered,7/9/2020,395 Bashford Park,,,,Canada,188.04,cash on delivery,1697.04
+15,15,10/2/2015,shipped,1/27/2014,3 Dryden Avenue,,,,Indonesia,543.59,cash on delivery,9065.41
+16,16,6/4/2014,delivered,1/31/2020,996 Mcguire Plaza,,,,China,123.05,PayPal,6803.37
+17,17,6/2/2012,pending,9/16/2018,8512 Porter Crossing,,,,Philippines,724.24,PayPal,7671.62
+18,18,12/26/2013,processing,4/26/2017,96770 Magdeline Parkway,,,,Tanzania,829.31,cash on delivery,3333.63
+19,19,3/22/2016,processing,3/8/2012,5141 Menomonie Plaza,,,,Russia,255.99,PayPal,4700.72
+20,20,10/8/2015,shipped,12/7/2012,9522 Sycamore Pass,,,,Serbia,404.78,credit card,6229.48
+21,21,1/22/2018,shipped,4/4/2022,3 Redwing Place,,,,China,315.84,credit card,989
+22,22,3/16/2014,processing,8/23/2019,6 Northview Crossing,,,,Nigeria,440.09,PayPal,3591.8
+23,23,7/6/2019,pending,7/8/2017,94 Ludington Street,,,,Poland,967.4,credit card,4525.91
+24,24,10/17/2012,shipped,10/27/2013,3 Buell Circle,,,,Russia,454.23,PayPal,9326.13
+25,25,5/19/2011,delivered,12/12/2017,34 Schlimgen Trail,,,,Uruguay,819.21,cash on delivery,8682.52
+26,26,8/3/2011,delivered,5/20/2010,75201 Service Center,,,,United States,427.56,cash on delivery,4917.79
+27,27,3/12/2012,pending,11/8/2013,1 Stone Corner Crossing,,,,Indonesia,998.28,cash on delivery,3038.36
+28,28,10/10/2017,pending,2/15/2020,52 Goodland Road,,,,Poland,148.46,PayPal,7419.82
+29,29,2/18/2020,shipped,7/27/2019,3411 Lindbergh Place,,,,China,787.66,credit card,1144.92
+30,30,4/24/2020,shipped,11/21/2020,765 Schmedeman Place,,,,Ukraine,805.64,cash on delivery,5279.88
+31,31,2/8/2010,shipped,8/3/2012,87 Meadow Valley Park,,,,Brazil,355.11,credit card,2263.59
+32,32,4/13/2015,delivered,4/11/2017,5511 Pine View Way,,,,Mexico,27.3,credit card,1295.3
+33,33,5/28/2014,pending,2/15/2011,74323 Texas Pass,,,,Russia,885.15,PayPal,9184.8
+34,34,4/9/2012,shipped,11/4/2019,20437 Novick Street,,,,Indonesia,880.89,cash on delivery,5474.66
+35,35,11/4/2020,shipped,10/1/2010,1000 Sunnyside Trail,,,,Kazakhstan,974.29,PayPal,9216.4
+36,36,10/14/2014,shipped,1/29/2010,759 Pond Hill,,,,China,400.2,PayPal,1728.88
+37,37,11/12/2012,pending,1/30/2016,874 Del Sol Trail,,,,Kenya,581.57,credit card,488.19
+38,38,4/18/2018,processing,2/19/2010,0 Pennsylvania Drive,,,,Luxembourg,797.71,PayPal,9160.12
+39,39,3/17/2013,pending,10/17/2021,6 Helena Point,,,,Peru,592.96,cash on delivery,9375.53
+40,40,8/7/2016,processing,10/11/2022,6452 Golf View Circle,,,,Russia,316.53,credit card,2933.27
+41,41,1/8/2018,shipped,12/19/2011,3369 Oriole Avenue,,,,United States,646.73,credit card,3421.8
+42,42,4/9/2014,shipped,11/27/2019,4347 Esch Center,,,,Mongolia,173.21,PayPal,1160.54
+43,43,7/10/2017,processing,3/3/2022,3 Center Street,,,,Germany,183,credit card,2338.72
+44,44,4/15/2016,shipped,11/7/2015,558 Tomscot Hill,,,,China,188.77,cash on delivery,8999.77
+45,45,5/20/2015,shipped,1/2/2019,2186 Welch Hill,,,,Russia,828.46,credit card,2697.73
+46,46,8/4/2016,processing,4/21/2014,916 Prairieview Lane,,,,Estonia,729.65,credit card,6709.28
+47,47,7/31/2012,shipped,3/13/2020,44055 Village Street,,,,Israel,758.57,cash on delivery,3062.94
+48,48,10/11/2017,pending,11/7/2018,72206 Mariners Cove Court,,,,Russia,371.44,PayPal,7633.27
+49,49,12/6/2016,processing,8/22/2011,17430 Springview Place,,,,South Africa,176.42,cash on delivery,6305.1
+50,50,1/28/2022,delivered,2/1/2010,08740 Buell Alley,,,,Philippines,962.34,PayPal,3791.3
+51,51,7/14/2019,shipped,6/29/2021,42 Clarendon Hill,,,,Portugal,213.77,PayPal,1382.72
+52,52,8/27/2022,delivered,10/21/2018,333 Fairview Pass,,,,Brazil,286.02,credit card,3987.52
+53,53,3/17/2020,pending,8/1/2020,8 Independence Trail,,,,Philippines,876.77,PayPal,9274.74
+54,54,3/1/2019,pending,1/4/2022,854 Waxwing Park,,,,China,759.24,PayPal,7197.38
+55,55,5/2/2017,delivered,12/19/2022,5 Forest Dale Lane,,,,China,577.97,PayPal,4348.98
+56,56,7/11/2021,pending,7/31/2022,131 Mesta Circle,,,,China,438.33,PayPal,6342.25
+57,57,9/8/2014,shipped,4/21/2021,211 Quincy Circle,,,,Russia,123.87,credit card,1894.96
+58,58,6/26/2017,delivered,11/23/2011,7 Columbus Trail,,,,China,471.4,credit card,3499
+59,59,9/12/2011,delivered,9/7/2020,6403 Dakota Court,,,,Indonesia,894.52,cash on delivery,9686.52
+60,60,4/6/2014,pending,12/23/2014,363 Stang Parkway,,,,United States,603.26,PayPal,5049.29
+61,61,6/23/2018,pending,2/2/2016,346 Michigan Lane,,,,Canada,557.83,credit card,164.74
+62,62,3/25/2016,pending,1/3/2014,18654 Kingsford Terrace,,,,Brazil,637.24,credit card,6413.25
+63,63,5/13/2010,pending,1/11/2021,58 Browning Street,,,,China,939.12,cash on delivery,9782.07
+64,64,4/24/2015,shipped,1/6/2012,9 Stang Alley,,,,Indonesia,539.43,PayPal,5391.9
+65,65,10/29/2021,pending,12/25/2015,80941 Center Road,,,,Brazil,828.94,cash on delivery,1704.1
+66,66,5/16/2018,delivered,4/17/2011,92 Schurz Plaza,,,,Serbia,495.39,PayPal,5012.39
+67,67,11/29/2019,pending,12/21/2019,93968 Beilfuss Lane,,,,Sweden,308.46,credit card,3770.37
+68,68,9/15/2018,shipped,2/9/2010,55 Merrick Plaza,,,,Philippines,959.38,PayPal,8402.69
+69,69,12/13/2016,processing,10/30/2012,7490 Mosinee Pass,,,,China,327.15,cash on delivery,9959.45
+70,70,4/17/2011,shipped,6/7/2019,74 Kipling Park,,,,Thailand,675.5,cash on delivery,9791.38
+71,71,4/3/2013,processing,10/15/2011,35350 6th Point,,,,Bulgaria,472.33,credit card,1423.21
+72,72,9/18/2010,shipped,8/30/2016,5927 Pleasure Way,,,,China,674.57,credit card,200.13
+73,73,3/13/2011,pending,11/15/2012,60 Hagan Place,,,,United States,492.38,credit card,1147.25
+74,74,4/2/2016,delivered,12/27/2014,7 Dottie Hill,,,,Nigeria,533.55,PayPal,2921.84
+75,75,12/20/2011,delivered,3/10/2016,30614 Gateway Alley,,,,Poland,996.23,cash on delivery,5269.07
+76,76,10/12/2011,processing,3/29/2018,27 Pierstorff Point,,,,Indonesia,266.18,credit card,8592.27
+77,77,1/21/2019,shipped,12/23/2020,39196 Elmside Circle,,,,Philippines,728.92,cash on delivery,5948.55
+78,78,5/22/2015,delivered,4/20/2012,421 Fordem Junction,,,,Pakistan,552.04,cash on delivery,7680.88
+79,79,1/1/2022,processing,2/27/2020,49 Jenifer Terrace,,,,Ukraine,313.02,cash on delivery,3679.29
+80,80,8/26/2012,delivered,5/23/2017,638 Lunder Junction,,,,South Africa,264.16,cash on delivery,895.81
+81,81,3/10/2016,delivered,7/8/2010,6 Montana Lane,,,,China,532.45,cash on delivery,7923.93
+82,82,12/17/2016,processing,10/25/2016,0 Bunting Center,,,,United States,553.45,credit card,747.03
+83,83,7/24/2012,delivered,3/2/2022,28 Sachtjen Alley,,,,Ukraine,807.82,credit card,1114.8
+84,84,7/22/2012,delivered,8/13/2011,8661 Green Ridge Place,,,,Poland,818.09,cash on delivery,1140.64
+85,85,12/14/2012,shipped,11/6/2022,925 Daystar Plaza,,,,Colombia,302.17,credit card,9818.05
+86,86,7/25/2016,pending,7/10/2018,4427 Vahlen Junction,,,,China,488.79,PayPal,3812.08
+87,87,4/10/2022,shipped,1/20/2010,8051 Brown Avenue,,,,China,875.76,cash on delivery,9080.69
+88,88,7/30/2020,pending,7/13/2019,26 Mockingbird Plaza,,,,Saudi Arabia,336.69,cash on delivery,9959.64
+89,89,12/22/2014,delivered,12/13/2016,38891 Golf Course Avenue,,,,Finland,433.87,credit card,7318.67
+90,90,4/20/2013,shipped,1/14/2013,88 Helena Center,,,,Macedonia,590.36,PayPal,8445.51
+91,91,12/18/2011,delivered,1/15/2020,00287 Johnson Street,,,,China,202.48,cash on delivery,588.05
+92,92,11/10/2014,shipped,9/23/2012,31 Di Loreto Junction,,,,China,881.99,PayPal,4776.41
+93,93,5/19/2016,pending,9/26/2010,209 Portage Crossing,,,,China,519.5,PayPal,5881.89
+94,94,1/29/2019,pending,11/25/2011,89668 Russell Plaza,,,,Ukraine,395.08,cash on delivery,4926.54
+95,95,5/5/2010,pending,8/10/2021,09805 Dakota Hill,,,,Indonesia,683.77,cash on delivery,7719.16
+96,96,4/30/2010,delivered,6/26/2014,04 Harper Crossing,,,,Philippines,360.56,PayPal,1929.7
+97,97,6/10/2015,processing,9/22/2022,87 Debra Drive,,,,Yemen,258.37,credit card,8118.73
+98,98,7/17/2021,shipped,8/14/2013,450 Jana Lane,,,,Indonesia,402.86,credit card,7711.82
+99,99,5/14/2013,delivered,5/7/2018,81756 Daystar Place,,,,China,757.66,credit card,9086.97
+100,100,2/22/2019,processing,6/15/2017,76939 Calypso Place,,,,Poland,36.17,cash on delivery,1940.16
+101,101,7/13/2013,shipped,8/9/2018,99 Vahlen Circle,,,,Philippines,144.31,credit card,4188.78
+102,102,4/25/2019,pending,1/6/2017,8461 Elgar Road,,,,Peru,597.45,credit card,3400.09
+103,103,5/14/2015,processing,7/22/2017,2354 Clyde Gallagher Lane,,,,Venezuela,976.59,PayPal,4724.61
+104,104,8/15/2011,delivered,6/24/2016,6348 Troy Pass,,,,Brazil,418.64,cash on delivery,4462.87
+105,105,9/18/2021,delivered,8/26/2019,8 Service Drive,,,,China,450.68,cash on delivery,4647.18
+106,106,6/28/2019,pending,1/20/2018,180 Hayes Park,,,,China,190.56,credit card,4827.18
+107,107,1/16/2022,processing,12/23/2013,5 Luster Avenue,,,,Syria,413.76,PayPal,5058.77
+108,108,12/12/2011,shipped,5/10/2014,62 Columbus Court,,,,Belarus,170.04,PayPal,7083.84
+109,109,3/7/2016,pending,1/28/2022,7 Merry Terrace,,,,Philippines,195.53,PayPal,4984.47
+110,110,2/8/2013,shipped,10/10/2011,4741 Corben Plaza,,,,China,819.38,cash on delivery,60.12
+111,111,12/24/2016,delivered,12/25/2012,830 Helena Hill,,,,Mozambique,874.49,PayPal,5978.89
+112,112,1/13/2013,pending,7/12/2015,0660 Stang Plaza,,,,Ecuador,450.49,credit card,9032.96
+113,113,3/21/2011,delivered,11/22/2010,93907 Sherman Center,,,,Czech Republic,424.07,cash on delivery,959.59
+114,114,1/8/2019,delivered,4/25/2020,64 Lillian Park,,,,China,587.48,PayPal,4800.31
+115,115,1/21/2014,processing,6/17/2016,7621 Morning Junction,,,,Germany,819.21,cash on delivery,4485.99
+116,116,2/22/2018,shipped,12/1/2018,474 Judy Drive,,,,Colombia,186.73,cash on delivery,1301.57
+117,117,12/2/2011,pending,9/7/2013,795 Iowa Way,,,,Myanmar,324.32,cash on delivery,4287.82
+118,118,3/2/2014,pending,1/5/2013,510 Dawn Crossing,,,,China,397.39,credit card,8877.23
+119,119,8/5/2010,processing,9/12/2014,7211 Welch Center,,,,Poland,208.41,credit card,9062.05
+120,120,12/13/2022,pending,12/10/2018,3 Starling Junction,,,,Argentina,368.42,cash on delivery,5762.53
+121,121,11/7/2014,delivered,6/5/2017,00055 Petterle Trail,,,,Uruguay,940.89,PayPal,2686.23
+122,122,7/18/2010,shipped,6/26/2010,40605 Spenser Park,,,,France,497.2,cash on delivery,3512.22
+123,123,10/18/2022,pending,11/4/2010,1 Ryan Crossing,,,,Thailand,53.76,credit card,5999.85
+124,124,12/4/2022,processing,9/15/2019,31 Michigan Terrace,,,,Afghanistan,330.25,cash on delivery,9091.21
+125,125,1/22/2011,processing,6/18/2022,00416 Doe Crossing Place,,,,China,571.87,PayPal,6573.35
+126,126,1/11/2014,delivered,1/10/2020,25 Kim Parkway,,,,Indonesia,937.11,credit card,2233.17
+127,127,6/27/2010,delivered,12/21/2022,2946 Declaration Court,,,,Netherlands,985.68,PayPal,5527.62
+128,128,8/9/2011,pending,11/30/2011,7 Dayton Place,,,,Micronesia,920.58,cash on delivery,7627.43
+129,129,8/21/2014,pending,2/10/2018,77 Daystar Road,,,,Guinea,961.89,PayPal,8058.59
+130,130,10/29/2014,pending,7/12/2016,0446 Brentwood Terrace,,,,Portugal,452.71,cash on delivery,2345.71
+131,131,3/8/2011,pending,6/28/2018,859 Karstens Plaza,,,,Argentina,252.34,credit card,723.16
+132,132,7/1/2017,shipped,9/23/2011,5919 Meadow Valley Circle,,,,China,119.96,credit card,7592.37
+133,133,10/27/2013,shipped,7/12/2016,337 Sauthoff Road,,,,China,971.17,cash on delivery,8335.65
+134,134,5/12/2022,processing,1/19/2012,69043 Towne Lane,,,,Pakistan,868.7,credit card,2481.9
+135,135,7/16/2019,processing,5/11/2017,0 Portage Pass,,,,Russia,25.04,credit card,7966.85
+136,136,6/17/2020,processing,7/8/2018,143 Sutherland Circle,,,,Portugal,518.33,PayPal,0.84
+137,137,2/23/2022,shipped,12/27/2020,8 Troy Terrace,,,,Ukraine,382.98,PayPal,5464.11
+138,138,1/22/2022,pending,11/22/2010,356 Manley Drive,,,,Czech Republic,589.48,PayPal,1830.91
+139,139,7/29/2015,processing,4/8/2020,84519 Petterle Terrace,,,,Peru,27.33,cash on delivery,2557.32
+140,140,2/25/2017,shipped,7/3/2016,99 Dahle Drive,,,,Bosnia and Herzegovina,866.13,credit card,9342.83
+141,141,8/23/2010,shipped,10/21/2021,43 Mendota Park,,,,Tanzania,274.62,credit card,4765.64
+142,142,12/6/2013,pending,8/6/2016,8298 Pennsylvania Crossing,,,,United States,466.89,credit card,6519.31
+143,143,3/6/2016,shipped,4/27/2016,8024 Huxley Way,,,,Venezuela,268.22,credit card,7850.63
+144,144,10/17/2021,pending,5/16/2016,6383 Main Place,,,,China,50.59,credit card,5213.08
+145,145,3/4/2021,processing,3/22/2018,00 Valley Edge Pass,,,,Sri Lanka,919.13,cash on delivery,6428.47
+146,146,7/8/2015,delivered,7/15/2011,22 Mesta Trail,,,,Japan,482.75,cash on delivery,1794.52
+147,147,1/26/2021,shipped,1/1/2020,0 Gerald Hill,,,,South Africa,125.28,cash on delivery,70.49
+148,148,8/28/2013,shipped,7/3/2017,257 Mcguire Court,,,,Dominican Republic,313.26,credit card,3270.76
+149,149,10/4/2010,shipped,4/25/2014,7780 Petterle Crossing,,,,Indonesia,917.65,cash on delivery,3608.03
+150,150,3/22/2011,shipped,5/18/2015,34 Columbus Trail,,,,Russia,986.04,credit card,9451.01
+151,151,6/18/2014,pending,3/26/2010,31971 Starling Park,,,,Libya,257.19,PayPal,3471.66
+152,152,8/13/2022,processing,4/18/2022,92 Myrtle Crossing,,,,Brazil,628.72,credit card,6940.22
+153,153,11/2/2022,processing,5/21/2020,83823 Maywood Way,,,,China,26.94,credit card,6150.12
+154,154,7/30/2012,processing,10/26/2021,5 Ridgeway Terrace,,,,Indonesia,315,PayPal,8875.76
+155,155,3/3/2018,shipped,12/13/2011,0716 Little Fleur Center,,,,Philippines,126.23,cash on delivery,7972.01
+156,156,12/28/2018,shipped,5/10/2010,4201 Thierer Circle,,,,Russia,782.71,cash on delivery,4679.05
+157,157,1/6/2010,processing,6/7/2012,63364 Fallview Place,,,,Colombia,551.55,PayPal,7987.24
+158,158,8/9/2019,pending,4/6/2022,4 Scoville Plaza,,,,Dominican Republic,73.53,credit card,3642.95
+159,159,10/6/2014,delivered,6/8/2018,8422 Meadow Ridge Lane,,,,Philippines,494.6,cash on delivery,7114.49
+160,160,2/16/2019,pending,10/4/2019,40597 Paget Park,,,,China,223.85,credit card,5127.51
+161,161,8/12/2020,delivered,9/25/2022,77221 Golf Course Road,,,,Uzbekistan,580.96,PayPal,7444.44
+162,162,12/17/2016,pending,4/30/2018,275 Cardinal Parkway,,,,Sweden,163.31,PayPal,3229.47
+163,163,3/2/2010,shipped,6/20/2016,1657 Aberg Parkway,,,,Portugal,971.85,credit card,2885.49
+164,164,9/9/2011,processing,7/1/2020,16907 Johnson Alley,,,,China,15.15,PayPal,9166.11
+165,165,5/16/2015,pending,2/1/2016,9 Cherokee Terrace,,,,Indonesia,89.33,credit card,3745.1
+166,166,8/2/2019,pending,7/31/2016,30116 Daystar Street,,,,Thailand,292.61,PayPal,2613.21
+167,167,11/6/2014,processing,10/29/2018,92705 Cherokee Hill,,,,Portugal,113.59,PayPal,6838.37
+168,168,12/20/2019,processing,6/2/2013,7013 Monument Trail,,,,Sweden,155.76,PayPal,7924.46
+169,169,12/20/2021,pending,8/17/2017,906 Dennis Avenue,,,,China,721.39,PayPal,1931.12
+170,170,4/10/2022,delivered,7/17/2012,993 Bluejay Terrace,,,,Uzbekistan,386.57,cash on delivery,9505.69
+171,171,12/2/2018,shipped,1/19/2021,00 Towne Point,,,,France,917.19,cash on delivery,753.19
+172,172,10/24/2016,pending,1/27/2014,742 Graedel Point,,,,Indonesia,848.23,credit card,3407.49
+173,173,11/8/2016,processing,1/3/2021,8 Macpherson Crossing,,,,Mexico,69.12,PayPal,5829.69
+174,174,8/3/2012,delivered,8/27/2021,3 Cordelia Alley,,,,Philippines,911.96,PayPal,4347.96
+175,175,9/23/2021,shipped,10/21/2015,7915 Fordem Parkway,,,,Belarus,915.68,PayPal,4553.25
+176,176,5/17/2022,pending,7/2/2013,5915 Granby Park,,,,Brazil,212.98,PayPal,973.35
+177,177,8/29/2022,shipped,3/19/2010,89060 Eastlawn Parkway,,,,Bangladesh,587.12,cash on delivery,1746.72
+178,178,4/11/2016,shipped,8/27/2015,56 Sutherland Parkway,,,,Croatia,264.33,credit card,6691.99
+179,179,6/14/2015,pending,4/3/2012,46716 Paget Pass,,,,China,291.85,credit card,3880
+180,180,1/26/2019,delivered,3/22/2012,83137 Logan Junction,,,,Indonesia,880.53,PayPal,3179.67
+181,181,2/21/2019,shipped,4/8/2017,91795 Glacier Hill Crossing,,,,Sweden,489.8,cash on delivery,7462.19
+182,182,3/10/2016,shipped,4/11/2020,845 Delladonna Street,,,,Russia,423.32,PayPal,5364.2
+183,183,5/5/2022,processing,9/5/2014,27999 Basil Point,,,,Peru,823.65,cash on delivery,7959.18
+184,184,3/3/2019,shipped,5/17/2020,45310 Oak Valley Place,,,,Mongolia,348.5,PayPal,5168.27
+185,185,6/28/2015,shipped,12/23/2016,5809 Ludington Trail,,,,France,719.24,PayPal,4174.83
+186,186,3/12/2022,delivered,3/18/2012,932 Crowley Park,,,,Bosnia and Herzegovina,291.54,cash on delivery,9811.44
+187,187,9/2/2012,shipped,3/8/2013,27233 Delladonna Alley,,,,Kenya,613.29,PayPal,5818.74
+188,188,6/24/2021,shipped,2/8/2015,298 Scoville Place,,,,Indonesia,345.03,PayPal,5433.52
+189,189,7/22/2013,processing,7/1/2016,8 Grayhawk Place,,,,Indonesia,637.53,PayPal,3625.73
+190,190,10/31/2017,delivered,9/2/2019,1 Fuller Crossing,,,,Indonesia,462.01,credit card,8654.59
+191,191,7/29/2017,processing,6/28/2020,7 Kedzie Pass,,,,Portugal,738.1,credit card,3105.24
+192,192,3/19/2021,pending,10/12/2020,6 Fuller Alley,,,,Macedonia,966.75,PayPal,3729.8
+193,193,9/9/2016,delivered,6/27/2011,3663 Twin Pines Place,,,,Portugal,587.78,credit card,7541.38
+194,194,1/26/2016,delivered,3/15/2020,0686 Village Green Park,,,,China,973.08,PayPal,8455.4
+195,195,3/19/2012,delivered,2/28/2018,57128 Nancy Crossing,,,,Denmark,661.3,cash on delivery,266.86
+196,196,4/19/2010,delivered,8/31/2017,52247 Becker Court,,,,Botswana,720.71,PayPal,4497.92
+197,197,1/8/2022,delivered,12/31/2019,6836 1st Court,,,,Tanzania,438.43,PayPal,6858.57
+198,198,2/16/2022,pending,12/16/2020,19434 Dapin Center,,,,Portugal,581.78,PayPal,7223.12
+199,199,1/26/2019,shipped,10/9/2022,89889 Gina Trail,,,,Ukraine,517.08,cash on delivery,1828.45
+200,200,2/22/2017,pending,2/4/2015,2 Anzinger Lane,,,,China,748.57,PayPal,5804.99
+201,201,8/11/2019,processing,6/19/2010,019 Dawn Point,,,,Indonesia,571.25,cash on delivery,9445.46
+202,202,4/1/2020,processing,9/29/2016,5103 Sugar Park,,,,Estonia,644.8,credit card,7621.65
+203,203,12/16/2014,delivered,12/29/2018,5 Graedel Crossing,,,,Poland,950.54,cash on delivery,5251.92
+204,204,10/7/2018,processing,2/18/2010,02 Lindbergh Junction,,,,Philippines,144.8,cash on delivery,6887.33
+205,205,8/25/2015,shipped,2/29/2012,4258 Novick Circle,,,,Denmark,104.02,PayPal,5168.2
+206,206,3/7/2022,pending,10/4/2020,50 Leroy Hill,,,,Poland,424.32,PayPal,4598.68
+207,207,9/10/2010,delivered,3/16/2020,048 Waxwing Center,,,,Australia,599.72,credit card,6596.06
+208,208,5/17/2010,processing,2/15/2011,69 Badeau Center,,,,Pakistan,107.94,credit card,2823.89
+209,209,3/27/2013,pending,9/24/2014,6 Troy Avenue,,,,Montenegro,206.71,PayPal,8923.69
+210,210,6/13/2021,shipped,6/23/2013,833 Buena Vista Alley,,,,China,92.95,cash on delivery,6590.75
+211,211,9/15/2022,delivered,2/22/2017,7 Susan Court,,,,Mexico,373.16,credit card,2283.02
+212,212,3/29/2022,pending,5/8/2011,1 Canary Place,,,,Indonesia,852.67,cash on delivery,6649.44
+213,213,4/11/2013,shipped,9/25/2018,4 Mifflin Lane,,,,Portugal,756.85,cash on delivery,6646.01
+214,214,10/23/2020,shipped,9/7/2017,46 Marquette Avenue,,,,China,710.26,PayPal,2498.07
+215,215,2/18/2010,shipped,7/11/2013,6 Hallows Alley,,,,Morocco,387.12,credit card,1814.66
+216,216,2/27/2016,processing,3/7/2010,5 Basil Way,,,,Indonesia,159.44,credit card,9586.84
+217,217,1/3/2014,shipped,5/4/2017,38 Quincy Center,,,,Vietnam,952.82,PayPal,1257.74
+218,218,4/26/2011,shipped,1/15/2014,511 Erie Alley,,,,Indonesia,240.92,cash on delivery,8503.02
+219,219,4/28/2015,processing,4/26/2022,30698 Shoshone Hill,,,,Russia,391.14,PayPal,2582.04
+220,220,1/21/2010,shipped,12/10/2020,662 Clove Hill,,,,Argentina,431.55,PayPal,4832.16
+221,221,11/27/2013,shipped,2/19/2013,94 2nd Way,,,,North Korea,154.34,PayPal,8336.7
+222,222,3/5/2011,pending,11/7/2018,069 Maple Wood Avenue,,,,Bulgaria,512.89,PayPal,9223
+223,223,2/25/2016,pending,4/19/2010,64 Bartillon Point,,,,Mexico,71.46,cash on delivery,8669.76
+224,224,12/16/2020,shipped,5/6/2020,176 Scott Avenue,,,,Greece,463.23,cash on delivery,5774.64
+225,225,3/6/2018,shipped,4/19/2011,8 Porter Drive,,,,China,458.53,PayPal,1821.01
+226,226,3/23/2017,processing,3/18/2016,27974 Loftsgordon Junction,,,,Myanmar,876.26,credit card,4660.77
+227,227,10/27/2011,pending,11/19/2021,8 Vermont Drive,,,,China,80.55,credit card,7701.54
+228,228,5/27/2019,shipped,12/25/2016,7715 Longview Street,,,,Portugal,78.98,PayPal,2637.9
+229,229,2/7/2020,shipped,6/18/2013,11262 Farmco Terrace,,,,China,72.84,credit card,8012.43
+230,230,4/20/2022,pending,4/7/2012,5 Kennedy Plaza,,,,Portugal,342.13,PayPal,7535.31
+231,231,5/15/2013,pending,11/29/2020,99 Village Court,,,,Philippines,351.76,credit card,2053.34
+232,232,8/16/2013,delivered,9/26/2017,4 Russell Plaza,,,,Mexico,891.2,PayPal,1633
+233,233,5/21/2010,processing,5/5/2015,9222 Armistice Place,,,,France,369.52,credit card,9626.27
+234,234,4/6/2018,delivered,3/15/2012,871 Waxwing Alley,,,,China,87.12,cash on delivery,5205.56
+235,235,8/18/2020,shipped,12/17/2013,7447 Becker Park,,,,Mozambique,4.69,cash on delivery,8059.88
+236,236,4/11/2013,delivered,3/30/2014,073 Sage Road,,,,China,381.18,PayPal,300.65
+237,237,10/6/2012,pending,3/22/2022,5216 Truax Hill,,,,North Korea,438.18,cash on delivery,458.31
+238,238,10/30/2016,pending,4/13/2010,44901 3rd Avenue,,,,China,882.28,credit card,1367.82
+239,239,8/29/2017,processing,4/22/2022,6097 Florence Hill,,,,France,130.39,PayPal,6500.65
+240,240,12/20/2011,processing,5/3/2010,35194 Tennessee Pass,,,,China,346.79,credit card,8930.28
+241,241,4/18/2015,delivered,3/31/2010,36 Iowa Place,,,,Sweden,10.76,credit card,833.34
+242,242,3/23/2013,shipped,7/15/2014,70825 Bartillon Circle,,,,Albania,372.81,PayPal,5272.13
+243,243,11/9/2018,processing,2/26/2020,54 Stang Avenue,,,,Colombia,51.57,PayPal,6013.99
+244,244,10/21/2016,delivered,8/15/2013,7 Cardinal Road,,,,Peru,759.81,cash on delivery,6174.69
+245,245,3/16/2017,processing,10/23/2011,4 Butternut Terrace,,,,Sweden,774.34,credit card,1223.48
+246,246,3/2/2021,delivered,12/7/2014,54196 Beilfuss Lane,,,,Peru,101.79,cash on delivery,8549.98
+247,247,5/2/2014,pending,10/6/2010,29588 Blaine Court,,,,Brazil,50.72,credit card,5784.99
+248,248,6/23/2020,processing,8/24/2022,34 Washington Center,,,,Philippines,498.04,cash on delivery,1878.88
+249,249,1/7/2021,shipped,2/23/2016,2515 Becker Plaza,,,,China,962.41,cash on delivery,6813.51
+250,250,8/14/2016,shipped,8/25/2012,76 American Ash Junction,,,,Pakistan,875.45,credit card,5727.39
+251,251,8/31/2018,delivered,6/3/2021,253 Briar Crest Alley,,,,China,596.1,cash on delivery,6753.58
+252,252,2/6/2019,processing,11/6/2017,0 Carberry Place,,,,China,166.92,PayPal,9730.18
+253,253,12/22/2015,processing,9/27/2021,5104 Thompson Road,,,,Russia,578.51,cash on delivery,5425.07
+254,254,10/13/2018,pending,3/9/2022,0 Artisan Circle,,,,Indonesia,39.86,cash on delivery,6615.84
+255,255,5/31/2017,processing,11/11/2012,80357 Eastwood Pass,,,,Brazil,283.27,credit card,8664.14
+256,256,2/11/2021,processing,7/11/2019,6 Warner Alley,,,,China,929.8,PayPal,7834.19
+257,257,2/4/2010,delivered,9/14/2022,081 Sunfield Hill,,,,Oman,672.66,cash on delivery,2136.08
+258,258,8/12/2010,pending,10/14/2017,098 Gulseth Alley,,,,Russia,96.47,PayPal,5297.12
+259,259,6/16/2020,processing,11/27/2019,3083 Kim Point,,,,China,397.88,credit card,937.47
+260,260,2/16/2014,delivered,7/24/2020,906 Riverside Junction,,,,Poland,17.91,cash on delivery,738.1
+261,261,1/16/2012,pending,5/29/2020,6 Dayton Plaza,,,,Spain,655.85,credit card,5659.04
+262,262,12/4/2013,processing,9/27/2020,34 Stephen Pass,,,,China,253.06,PayPal,6137.26
+263,263,5/22/2017,pending,8/21/2011,04361 Old Shore Road,,,,Belarus,0.41,credit card,6436.21
+264,264,6/12/2011,delivered,4/7/2020,72418 Granby Center,,,,Greece,773.13,cash on delivery,9666.28
+265,265,5/16/2012,shipped,5/1/2013,61058 Scott Lane,,,,Russia,359.06,PayPal,7978.75
+266,266,12/19/2021,pending,10/26/2015,90 Kensington Park,,,,Ecuador,750.69,PayPal,1247.63
+267,267,3/21/2011,processing,7/23/2010,294 Lakeland Terrace,,,,Poland,573.75,cash on delivery,2219.43
+268,268,12/29/2022,processing,3/12/2018,62 Dunning Park,,,,United Kingdom,155.46,PayPal,1467.4
+269,269,7/13/2010,delivered,12/21/2020,2032 Gale Point,,,,Sudan,944.04,credit card,384.64
+270,270,10/15/2015,pending,9/10/2012,08338 Ryan Court,,,,China,600.33,PayPal,897
+271,271,10/24/2018,processing,7/28/2022,81214 Meadow Ridge Hill,,,,China,106.62,PayPal,888.8
+272,272,6/28/2021,shipped,2/28/2014,974 Gale Park,,,,Czech Republic,213.71,credit card,19.16
+273,273,8/18/2016,shipped,6/4/2016,691 Warrior Hill,,,,Ukraine,979.14,cash on delivery,7305.1
+274,274,3/18/2014,delivered,6/1/2012,92089 Manufacturers Center,,,,China,314.14,cash on delivery,8850.86
+275,275,6/11/2013,pending,5/5/2016,210 Bluejay Plaza,,,,Indonesia,915.39,cash on delivery,7942.98
+276,276,5/14/2021,delivered,4/26/2016,8 Granby Hill,,,,Russia,559.61,credit card,4977.58
+277,277,12/30/2012,shipped,2/11/2016,6 Lyons Drive,,,,China,192.49,PayPal,2287.39
+278,278,12/27/2019,shipped,4/2/2014,65367 Barnett Pass,,,,Indonesia,332.26,cash on delivery,9493.49
+279,279,7/23/2016,shipped,12/15/2018,48701 Hoffman Alley,,,,China,328.59,cash on delivery,4217.04
+280,280,11/6/2014,pending,11/18/2012,7475 Loomis Junction,,,,Armenia,553.4,credit card,4682.3
+281,281,8/18/2010,delivered,6/8/2012,252 American Alley,,,,New Zealand,620.93,PayPal,2036.29
+282,282,3/25/2017,pending,7/26/2014,4 Oriole Center,,,,France,612.09,credit card,1960.74
+283,283,8/2/2010,shipped,12/12/2010,97 Namekagon Point,,,,Peru,171.16,cash on delivery,2517.4
+284,284,2/10/2015,processing,11/16/2010,0 Victoria Road,,,,Angola,262.28,credit card,3769.74
+285,285,5/11/2018,processing,2/3/2010,53492 Meadow Vale Circle,,,,Indonesia,731.28,credit card,4357.2
+286,286,10/11/2017,delivered,3/26/2016,11556 High Crossing Circle,,,,Ireland,502.34,credit card,5617.13
+287,287,9/29/2022,pending,7/19/2016,985 Hayes Circle,,,,Ukraine,100.41,credit card,385.87
+288,288,7/4/2012,processing,4/19/2010,0 Chive Junction,,,,Slovenia,922.68,cash on delivery,259.17
+289,289,4/5/2012,shipped,3/26/2017,6 Lerdahl Avenue,,,,Jamaica,775.67,credit card,7159.94
+290,290,9/23/2022,shipped,7/5/2019,45229 Lillian Trail,,,,Indonesia,206.7,cash on delivery,6480.3
+291,291,6/4/2010,shipped,8/7/2011,47 Randy Park,,,,Angola,841.03,cash on delivery,8818.9
+292,292,12/19/2011,pending,4/6/2015,10 Meadow Valley Alley,,,,Indonesia,654.45,PayPal,8461.78
+293,293,6/17/2010,processing,12/21/2015,62542 Packers Point,,,,Guatemala,430.71,PayPal,1068.56
+294,294,10/27/2016,delivered,12/11/2016,9 Manley Junction,,,,Palestinian Territory,231.31,cash on delivery,8235.39
+295,295,2/11/2017,pending,6/13/2013,2 Thackeray Court,,,,Indonesia,824.17,credit card,8954.19
+296,296,4/21/2017,processing,3/14/2019,0 Lien Alley,,,,Canada,59.79,credit card,8184.58
+297,297,3/25/2012,pending,5/19/2021,52 Manitowish Way,,,,China,296.23,credit card,9444.72
+298,298,6/3/2017,delivered,3/23/2022,833 Mesta Point,,,,Yemen,955.96,credit card,4394.53
+299,299,9/28/2016,pending,11/13/2012,636 Longview Center,,,,Democratic Republic of the Congo,686.62,cash on delivery,2828.25
+300,300,8/18/2010,delivered,5/5/2021,653 Sherman Circle,,,,Kenya,152.17,credit card,4550.73
+301,301,5/6/2017,processing,10/14/2014,511 Sachs Plaza,,,,Sri Lanka,556.43,PayPal,9942.33
+302,302,11/27/2022,shipped,3/1/2013,151 Oak Way,,,,China,583.85,credit card,375.72
+303,303,1/4/2019,shipped,11/8/2020,0 Blue Bill Park Point,,,,Spain,61.2,cash on delivery,9905.7
+304,304,7/17/2015,delivered,8/8/2018,770 Cordelia Crossing,,,,Philippines,342.37,cash on delivery,8913.76
+305,305,8/19/2012,pending,5/15/2014,8 Caliangt Plaza,,,,United States,867.23,credit card,9200.93
+306,306,6/25/2021,delivered,8/6/2010,6711 Sheridan Avenue,,,,Indonesia,525.28,PayPal,7676.14
+307,307,3/14/2020,delivered,12/15/2017,653 Bunker Hill Center,,,,Czech Republic,355.22,PayPal,5801.05
+308,308,6/3/2013,shipped,7/23/2011,73 Drewry Lane,,,,Russia,888.39,credit card,4215.26
+309,309,10/7/2010,shipped,12/13/2013,1 Hoard Alley,,,,Ukraine,534.41,cash on delivery,6155.88
+310,310,3/25/2019,shipped,4/1/2021,57689 Lillian Center,,,,Indonesia,653.59,cash on delivery,6406.1
+311,311,8/14/2012,shipped,3/19/2016,66301 1st Park,,,,Brazil,953.38,PayPal,9759.41
+312,312,2/21/2016,shipped,2/20/2016,716 Scofield Place,,,,United Kingdom,43.14,credit card,2945.09
+313,313,11/25/2014,delivered,9/21/2014,92 Holmberg Circle,,,,France,947.86,credit card,4858.86
+314,314,11/22/2022,shipped,4/17/2020,582 Knutson Place,,,,Czech Republic,816.69,cash on delivery,2010.07
+315,315,7/25/2021,delivered,3/10/2017,087 Meadow Ridge Alley,,,,Kyrgyzstan,353.67,cash on delivery,8993.87
+316,316,11/5/2021,delivered,1/9/2014,11 Everett Circle,,,,Ukraine,762.41,credit card,7919.72
+317,317,11/20/2011,shipped,4/21/2014,07356 Southridge Street,,,,Brazil,881.25,cash on delivery,2714.06
+318,318,2/14/2022,pending,4/9/2022,81191 Mifflin Junction,,,,Croatia,379.12,cash on delivery,1634.54
+319,319,7/22/2017,delivered,5/3/2022,8089 Granby Parkway,,,,Palestinian Territory,879.82,PayPal,8555.83
+320,320,2/23/2022,pending,3/5/2014,8414 Bobwhite Parkway,,,,Sweden,982.68,PayPal,6066.1
+321,321,8/9/2010,delivered,5/23/2012,286 Marcy Street,,,,China,551.08,credit card,3441.22
+322,322,1/25/2020,pending,4/15/2017,8 Holmberg Court,,,,Vietnam,467.3,credit card,1946.37
+323,323,7/29/2017,processing,7/8/2011,0297 Sycamore Place,,,,Vietnam,828.05,PayPal,3057.32
+324,324,8/7/2011,pending,10/25/2021,21067 Manitowish Alley,,,,Finland,798.59,cash on delivery,9699.11
+325,325,2/6/2020,delivered,6/15/2013,449 Nelson Avenue,,,,Indonesia,913.01,cash on delivery,3845.16
+326,326,3/11/2010,shipped,1/23/2014,716 Prentice Crossing,,,,Morocco,647.09,credit card,9241.02
+327,327,1/6/2013,processing,5/14/2018,94323 Everett Street,,,,Cape Verde,937.37,PayPal,2462.14
+328,328,9/21/2021,processing,1/12/2012,2 Anzinger Street,,,,Indonesia,787.68,cash on delivery,2982.52
+329,329,12/4/2019,shipped,1/24/2010,2 Stang Drive,,,,United States,734.44,PayPal,3262.75
+330,330,12/21/2012,processing,7/30/2016,63302 Monica Alley,,,,Russia,803.05,cash on delivery,8366.59
+331,331,7/26/2016,pending,9/6/2012,09713 Messerschmidt Parkway,,,,Portugal,303.84,cash on delivery,9657.65
+332,332,6/18/2021,shipped,5/21/2020,877 Meadow Ridge Avenue,,,,Sweden,621.6,PayPal,7867.96
+333,333,10/12/2020,delivered,11/19/2010,90296 Rockefeller Center,,,,Portugal,726.96,cash on delivery,577.21
+334,334,9/24/2018,shipped,7/12/2017,80 Scott Center,,,,China,209.82,PayPal,3891.52
+335,335,6/4/2019,processing,9/14/2019,5 Harbort Road,,,,Israel,798.62,PayPal,1899.14
+336,336,11/27/2013,shipped,10/19/2015,30292 Main Junction,,,,Argentina,697.29,credit card,7259.3
+337,337,11/22/2020,pending,6/12/2018,36965 Stone Corner Plaza,,,,Brazil,432.26,PayPal,4007.31
+338,338,2/29/2016,delivered,11/12/2010,5341 South Trail,,,,Indonesia,86.01,cash on delivery,8585.96
+339,339,2/14/2014,processing,5/2/2016,9360 Green Ridge Pass,,,,South Africa,119.45,PayPal,9565.73
+340,340,7/17/2021,delivered,1/12/2019,820 Algoma Parkway,,,,China,320.89,cash on delivery,2753.72
+341,341,1/1/2015,processing,9/30/2014,3326 Algoma Trail,,,,Thailand,601.57,credit card,6800.6
+342,342,4/30/2018,delivered,8/1/2012,9 David Terrace,,,,Peru,132.49,cash on delivery,4169.96
+343,343,10/29/2022,shipped,5/26/2013,59218 Center Court,,,,China,972.32,cash on delivery,2794.06
+344,344,9/3/2017,processing,2/25/2013,8843 Sutteridge Lane,,,,France,635.8,credit card,4713.57
+345,345,9/17/2021,delivered,2/16/2017,686 Golf Course Hill,,,,Spain,495.45,cash on delivery,3217.83
+346,346,8/25/2018,pending,12/17/2010,4690 Holy Cross Trail,,,,United States,738.86,cash on delivery,2792.23
+347,347,2/22/2011,shipped,12/13/2012,036 Brickson Park Circle,,,,Russia,366.03,PayPal,2598.96
+348,348,11/19/2017,pending,12/23/2015,2 Ridgeview Place,,,,Colombia,483.51,PayPal,8363.68
+349,349,2/4/2013,delivered,3/4/2018,70 Main Alley,,,,China,494.29,credit card,6299.13
+350,350,10/31/2021,delivered,10/20/2019,9523 6th Road,,,,China,571.03,cash on delivery,2863.74
+351,351,8/9/2020,pending,3/10/2019,9888 Duke Crossing,,,,Indonesia,282.29,PayPal,8112.83
+352,352,11/30/2016,delivered,9/18/2016,602 Becker Alley,,,,China,554.71,PayPal,4614.54
+353,353,5/24/2022,pending,2/10/2014,801 Prairie Rose Center,,,,China,373.15,PayPal,1133.83
+354,354,9/17/2015,processing,11/28/2014,5 Stephen Court,,,,Indonesia,37.75,credit card,3084.93
+355,355,4/22/2020,pending,10/14/2019,3 Bay Drive,,,,Russia,496.97,cash on delivery,9368.89
+356,356,7/17/2019,shipped,10/17/2019,37879 Eliot Lane,,,,China,48.57,credit card,5305.28
+357,357,5/17/2017,shipped,12/21/2015,5 Emmet Lane,,,,Mexico,314.03,PayPal,5812.44
+358,358,9/9/2015,shipped,11/23/2020,86 Prairie Rose Crossing,,,,France,565.26,credit card,3404.69
+359,359,3/31/2010,delivered,2/5/2010,20 Gulseth Lane,,,,Philippines,465.1,PayPal,7748.02
+360,360,12/23/2021,shipped,6/3/2020,821 Old Gate Lane,,,,Cameroon,395.36,cash on delivery,7006.2
+361,361,12/20/2015,shipped,3/6/2018,3 Hovde Hill,,,,Russia,470.54,cash on delivery,2213.45
+362,362,7/31/2018,processing,9/16/2012,249 Carey Drive,,,,China,918.6,PayPal,6110.58
+363,363,1/26/2011,pending,9/3/2018,8113 Boyd Junction,,,,Guatemala,61.11,PayPal,1982.73
+364,364,9/15/2011,pending,1/19/2020,8 Shoshone Point,,,,Portugal,290.17,PayPal,6823.1
+365,365,1/12/2019,shipped,12/2/2012,1 Bartelt Terrace,,,,Indonesia,385.79,PayPal,9592.8
+366,366,12/12/2020,processing,1/17/2011,3014 Barby Court,,,,Indonesia,42.94,credit card,4809.18
+367,367,7/18/2021,processing,8/28/2020,502 Mayfield Parkway,,,,Philippines,287.51,PayPal,6758.97
+368,368,8/27/2011,shipped,7/18/2013,95173 Ridge Oak Road,,,,China,981.51,cash on delivery,7855.97
+369,369,5/24/2018,processing,7/28/2016,45810 Ryan Park,,,,South Korea,616.22,cash on delivery,6101.49
+370,370,5/21/2016,processing,3/12/2014,6950 Graedel Hill,,,,Brazil,395.33,cash on delivery,5757.25
+371,371,9/20/2020,processing,9/21/2011,6 Schiller Trail,,,,Colombia,671.43,PayPal,3485.69
+372,372,5/11/2011,shipped,10/27/2017,0745 Hansons Pass,,,,Philippines,630.36,PayPal,9507.47
+373,373,11/4/2018,shipped,5/25/2020,0 Service Road,,,,Russia,358.1,PayPal,4101.59
+374,374,9/14/2015,delivered,9/1/2019,6 Rowland Plaza,,,,Malta,106.79,cash on delivery,1344.85
+375,375,2/4/2022,processing,1/6/2010,5 Grasskamp Park,,,,Brazil,14.27,PayPal,1092.81
+376,376,2/25/2011,shipped,4/21/2017,9 Warner Circle,,,,Brazil,737.24,credit card,7638.73
+377,377,3/25/2021,delivered,9/5/2022,3079 Brentwood Trail,,,,Indonesia,676.96,PayPal,3489.4
+378,378,10/1/2021,shipped,2/19/2019,2323 Hovde Drive,,,,Indonesia,109.69,credit card,2055.74
+379,379,2/21/2013,delivered,9/30/2018,956 Mosinee Street,,,,Portugal,575.56,PayPal,9968.57
+380,380,11/26/2013,processing,10/16/2013,4802 Lighthouse Bay Crossing,,,,Greece,196.5,credit card,1430.75
+381,381,4/28/2018,processing,2/24/2022,5 Gateway Place,,,,Philippines,156.65,PayPal,8839.65
+382,382,12/18/2010,pending,9/11/2017,0079 Summit Way,,,,Nigeria,932.02,PayPal,2638
+383,383,11/2/2012,shipped,3/27/2020,32 Northview Pass,,,,United States,530.3,credit card,5138.51
+384,384,11/16/2012,delivered,2/11/2013,2911 Hauk Alley,,,,China,213.79,cash on delivery,804.4
+385,385,7/19/2020,processing,9/10/2016,2 Crowley Circle,,,,Philippines,792.14,cash on delivery,9380
+386,386,11/13/2018,processing,9/17/2015,6818 Oak Junction,,,,Russia,959.96,PayPal,2709.49
+387,387,12/12/2020,pending,9/26/2021,8 Elmside Hill,,,,Indonesia,222.71,PayPal,1366.14
+388,388,2/1/2018,shipped,3/20/2010,75 Kinsman Junction,,,,Indonesia,675.74,cash on delivery,9658.5
+389,389,5/29/2016,processing,12/24/2021,9 Thierer Crossing,,,,China,940.19,cash on delivery,1879.92
+390,390,12/3/2010,processing,8/27/2012,1828 Jay Junction,,,,China,556.63,PayPal,7164.38
+391,391,12/12/2021,processing,2/2/2020,655 Paget Circle,,,,Portugal,108.23,cash on delivery,1131.74
+392,392,8/28/2021,pending,4/8/2015,5 Morningstar Street,,,,France,794.06,PayPal,6662.16
+393,393,2/27/2011,processing,1/30/2016,61342 Knutson Way,,,,Greece,181.28,PayPal,7342.9
+394,394,9/6/2021,delivered,6/18/2011,7160 Main Point,,,,China,162.48,credit card,3442.9
+395,395,1/12/2022,delivered,9/19/2011,91 Pennsylvania Street,,,,Afghanistan,475.91,PayPal,3528.92
+396,396,10/21/2010,delivered,3/20/2020,21 Beilfuss Drive,,,,Tanzania,478.03,PayPal,6613.26
+397,397,2/7/2017,shipped,8/20/2019,23 John Wall Parkway,,,,Indonesia,651.07,PayPal,8580.66
+398,398,6/24/2016,shipped,12/10/2015,04 Waywood Avenue,,,,Indonesia,250.34,PayPal,5117.43
+399,399,9/15/2017,pending,12/15/2011,75 Warbler Avenue,,,,China,428.58,cash on delivery,3489.32
+400,400,12/31/2015,delivered,10/27/2010,3 Graedel Parkway,,,,Japan,451.97,PayPal,4423.09
+401,401,2/14/2020,processing,5/20/2017,33986 Pepper Wood Center,,,,Martinique,621.95,credit card,3798.85
+402,402,5/31/2020,pending,7/31/2013,361 Commercial Point,,,,Philippines,882.27,cash on delivery,2666.04
+403,403,1/7/2017,delivered,1/20/2021,94538 Katie Hill,,,,Brazil,878,PayPal,8372.4
+404,404,3/19/2022,processing,11/16/2018,9 Parkside Crossing,,,,Sweden,690.25,PayPal,8533.94
+405,405,12/9/2010,processing,9/6/2016,4 Miller Crossing,,,,Portugal,87.39,cash on delivery,5935.22
+406,406,12/23/2022,processing,5/20/2019,25742 Carpenter Road,,,,Indonesia,127.43,cash on delivery,4834.98
+407,407,7/5/2010,pending,10/25/2017,39949 Trailsway Alley,,,,China,474.09,PayPal,13.66
+408,408,2/2/2016,shipped,3/26/2011,67 Eagle Crest Plaza,,,,Canada,533.7,credit card,604.16
+409,409,4/13/2011,delivered,5/30/2013,2 Burrows Way,,,,Indonesia,471.13,credit card,7941.23
+410,410,12/25/2021,delivered,6/3/2011,3289 Pennsylvania Crossing,,,,Netherlands,94.34,PayPal,3284.44
+411,411,10/24/2021,pending,11/10/2022,731 4th Circle,,,,United States,956.89,credit card,436.52
+412,412,9/8/2016,processing,11/1/2022,50080 Spaight Parkway,,,,Brazil,970.77,PayPal,9304.93
+413,413,9/7/2022,delivered,4/20/2011,4392 Schmedeman Parkway,,,,Switzerland,303.91,PayPal,1364.76
+414,414,5/2/2017,shipped,10/8/2012,23 Lyons Way,,,,United States,872.65,credit card,7910.29
+415,415,11/19/2012,shipped,6/24/2015,9 Kensington Way,,,,Namibia,963.46,PayPal,795.28
+416,416,5/28/2011,processing,7/7/2022,3735 Sunfield Way,,,,Poland,714.86,PayPal,4317.44
+417,417,5/24/2010,processing,9/11/2022,880 Mariners Cove Parkway,,,,Dominican Republic,927.96,credit card,5890.3
+418,418,1/26/2020,delivered,7/29/2018,65136 Darwin Road,,,,China,340.9,cash on delivery,4486.45
+419,419,12/20/2019,pending,2/11/2022,2 Waywood Lane,,,,Russia,973.45,cash on delivery,3069.13
+420,420,10/2/2021,processing,10/31/2018,4 Grim Parkway,,,,China,826,credit card,1508.86
+421,421,2/7/2011,shipped,10/3/2010,922 Westend Road,,,,Bulgaria,926.07,cash on delivery,2805.44
+422,422,5/3/2010,processing,9/13/2014,2366 Center Parkway,,,,Cameroon,672.29,PayPal,7897.49
+423,423,7/5/2020,processing,5/7/2014,24 Loomis Plaza,,,,Ivory Coast,588.59,PayPal,1188.91
+424,424,6/26/2021,shipped,5/16/2020,2189 Melvin Place,,,,Taiwan,280.56,PayPal,2939.29
+425,425,12/28/2011,shipped,10/4/2016,58534 Ludington Court,,,,Nigeria,348.44,credit card,5329.3
+426,426,10/14/2015,delivered,3/12/2017,47341 Homewood Court,,,,Brazil,435.87,credit card,5642.55
+427,427,5/1/2019,pending,11/28/2014,06 Cody Crossing,,,,Philippines,680.33,PayPal,8911.63
+428,428,2/11/2019,processing,3/27/2015,878 Nova Way,,,,Indonesia,590.62,cash on delivery,7842.94
+429,429,7/9/2014,delivered,12/7/2018,7 Merrick Park,,,,Japan,549.44,PayPal,8382.32
+430,430,5/22/2018,processing,10/14/2013,48479 Golf View Junction,,,,Brazil,21.28,PayPal,9140.87
+431,431,4/18/2020,pending,12/26/2010,8891 Corry Place,,,,Netherlands,547.21,credit card,5173.63
+432,432,6/8/2017,shipped,7/18/2015,99887 Portage Parkway,,,,China,801.53,cash on delivery,7929.34
+433,433,3/17/2018,pending,6/12/2011,1 Eggendart Park,,,,Croatia,153.66,cash on delivery,260.42
+434,434,9/14/2018,shipped,2/22/2017,01312 Melby Circle,,,,Peru,852.95,credit card,2571.32
+435,435,9/27/2018,processing,9/16/2011,36047 Briar Crest Crossing,,,,Slovenia,867.06,credit card,7985.7
+436,436,1/3/2013,processing,7/5/2010,278 4th Plaza,,,,China,654.43,cash on delivery,1016.65
+437,437,5/5/2011,shipped,7/23/2019,70 Coleman Lane,,,,Venezuela,657.81,credit card,3665.46
+438,438,4/30/2017,processing,9/3/2018,6727 Melody Place,,,,China,139.08,cash on delivery,5212.31
+439,439,6/5/2021,processing,7/27/2021,61 Talmadge Way,,,,Czech Republic,591.36,cash on delivery,661.7
+440,440,5/25/2013,processing,12/21/2020,2 Birchwood Terrace,,,,China,951.33,credit card,3201.13
+441,441,1/12/2020,delivered,8/15/2021,38813 School Road,,,,China,643.03,PayPal,5620.7
+442,442,8/3/2012,delivered,12/25/2014,70 Kinsman Plaza,,,,Portugal,307.06,cash on delivery,5286.25
+443,443,9/4/2020,delivered,6/8/2013,71790 Chive Road,,,,Philippines,743.37,cash on delivery,4476.94
+444,444,2/12/2022,pending,6/29/2012,396 Duke Plaza,,,,Greece,303.65,cash on delivery,5438.82
+445,445,3/19/2018,shipped,8/8/2017,74445 Lyons Circle,,,,China,734.21,PayPal,7946.63
+446,446,3/3/2012,pending,8/3/2020,53706 Barby Pass,,,,Syria,239.35,PayPal,2136.14
+447,447,11/17/2017,pending,9/1/2014,09 Bayside Pass,,,,China,41.23,cash on delivery,3096.67
+448,448,1/9/2017,pending,4/17/2014,5 Anzinger Hill,,,,China,39.58,PayPal,2825.87
+449,449,5/26/2017,delivered,7/5/2022,412 Packers Pass,,,,Sweden,109.5,cash on delivery,7303.62
+450,450,11/30/2019,pending,2/17/2021,6631 Bayside Center,,,,Uzbekistan,3.34,PayPal,7485.06
+451,451,12/4/2011,delivered,6/16/2022,67556 Oak Place,,,,Indonesia,52.5,credit card,729.93
+452,452,4/5/2016,pending,8/21/2012,0790 Pierstorff Park,,,,Philippines,288.51,credit card,2348.82
+453,453,6/14/2011,shipped,9/26/2020,427 Oakridge Circle,,,,Spain,105.57,PayPal,6799.89
+454,454,10/2/2010,shipped,2/28/2015,2334 5th Lane,,,,Russia,711.59,credit card,2704.58
+455,455,11/23/2013,shipped,1/9/2018,14 Buhler Lane,,,,Peru,154.85,credit card,9137.25
+456,456,1/7/2012,shipped,1/7/2018,977 Eggendart Center,,,,Colombia,383.32,PayPal,761.01
+457,457,11/13/2017,pending,10/25/2013,487 Golf View Crossing,,,,Poland,65.2,credit card,4604.19
+458,458,7/30/2018,pending,4/19/2016,45960 Meadow Ridge Pass,,,,Sweden,643.31,credit card,6926.13
+459,459,6/27/2015,processing,11/22/2018,484 Graedel Parkway,,,,Panama,880.47,credit card,4585.47
+460,460,5/31/2011,pending,8/4/2020,388 Basil Pass,,,,Indonesia,446.78,credit card,1957.38
+461,461,2/9/2020,pending,9/4/2013,50179 Farragut Hill,,,,China,377.32,cash on delivery,9250.26
+462,462,7/1/2010,delivered,10/30/2012,2 Dixon Park,,,,Thailand,425.16,PayPal,8376.7
+463,463,4/3/2010,shipped,3/18/2014,3904 Hollow Ridge Hill,,,,China,492.56,credit card,343.63
+464,464,7/17/2011,processing,1/12/2018,04 Huxley Circle,,,,Portugal,613.27,PayPal,3029.53
+465,465,11/7/2015,shipped,1/9/2010,3032 Sutherland Street,,,,Philippines,625.01,credit card,9386.85
+466,466,7/14/2015,shipped,10/21/2017,5 Eliot Hill,,,,Brazil,822.02,PayPal,9664.58
+467,467,8/1/2019,processing,3/3/2010,87516 Surrey Crossing,,,,China,920.03,PayPal,6687.42
+468,468,2/26/2020,processing,6/21/2016,43669 4th Court,,,,Vietnam,527.7,PayPal,4057.49
+469,469,6/10/2010,processing,4/16/2015,0743 Derek Place,,,,Portugal,66.62,cash on delivery,221.45
+470,470,6/21/2017,processing,10/19/2019,173 Farwell Trail,,,,China,859.77,credit card,1461.71
+471,471,6/12/2015,shipped,3/30/2013,4 Ohio Terrace,,,,Sweden,907.14,credit card,1332.46
+472,472,12/1/2018,delivered,8/24/2019,4710 Jenna Crossing,,,,Mexico,173.95,credit card,1787.74
+473,473,8/10/2016,shipped,9/7/2014,82 Eastwood Road,,,,Indonesia,466.25,PayPal,2888.6
+474,474,6/24/2022,pending,12/12/2011,67789 Sutteridge Way,,,,Poland,563.93,PayPal,9057.44
+475,475,9/15/2010,pending,11/3/2019,00 Dottie Drive,,,,Belarus,92.87,PayPal,9230.32
+476,476,5/9/2013,shipped,4/15/2021,49948 Marcy Junction,,,,China,709.76,credit card,607.51
+477,477,6/21/2019,processing,4/27/2017,5124 Stoughton Avenue,,,,France,457.46,credit card,2858.32
+478,478,10/18/2011,delivered,10/15/2018,76034 Harper Pass,,,,Netherlands,50.37,PayPal,7421.76
+479,479,4/14/2017,delivered,9/30/2021,0 Katie Point,,,,China,686.28,PayPal,6849.59
+480,480,5/4/2011,pending,1/28/2021,08 Fairview Avenue,,,,China,524.87,cash on delivery,1248.52
+481,481,5/16/2010,delivered,12/25/2010,66680 Warrior Road,,,,China,293.34,PayPal,2202.52
+482,482,12/15/2018,delivered,11/29/2018,3 Continental Place,,,,Philippines,183.12,cash on delivery,2462.11
+483,483,6/6/2010,processing,8/11/2015,186 Valley Edge Pass,,,,Iran,866.92,credit card,1795.55
+484,484,7/29/2021,pending,10/7/2011,2803 Forest Dale Circle,,,,Brazil,192.47,PayPal,6056.27
+485,485,10/7/2011,pending,9/5/2013,970 Corscot Parkway,,,,France,112.07,PayPal,4021.89
+486,486,10/31/2017,processing,6/5/2020,6 Logan Avenue,,,,Poland,215.02,cash on delivery,543.52
+487,487,11/6/2017,delivered,12/23/2019,44 Ilene Way,,,,Portugal,882.38,PayPal,3202.99
+488,488,9/28/2013,processing,1/18/2022,46903 Petterle Court,,,,Vietnam,815.2,cash on delivery,8912.91
+489,489,11/27/2016,pending,7/29/2022,59 Prairieview Parkway,,,,Thailand,688.71,cash on delivery,531.1
+490,490,2/25/2021,processing,9/5/2012,01095 Stang Center,,,,Indonesia,807.94,PayPal,1285.69
+491,491,4/27/2011,shipped,2/22/2020,41 Clarendon Pass,,,,China,669.86,PayPal,354.08
+492,492,4/2/2022,delivered,11/8/2020,69 Ohio Court,,,,Russia,344.36,credit card,604.72
+493,493,12/31/2013,delivered,3/14/2021,843 Sauthoff Center,,,,Indonesia,622.08,cash on delivery,5888.22
+494,494,2/2/2010,shipped,9/10/2022,48126 Kensington Trail,,,,South Africa,794.95,PayPal,6640.87
+495,495,11/30/2020,processing,11/23/2016,88172 Golf Course Place,,,,Poland,432.13,cash on delivery,9531.77
+496,496,4/3/2020,pending,1/18/2021,39548 Melvin Avenue,,,,Indonesia,822.62,credit card,5799.4
+497,497,1/28/2017,pending,5/20/2012,9629 Erie Center,,,,Nigeria,525.35,credit card,296
+498,498,11/5/2021,processing,1/3/2021,3 La Follette Park,,,,Ethiopia,953.24,credit card,2097.61
+499,499,9/6/2019,pending,9/20/2014,16332 Tomscot Street,,,,China,303.6,credit card,9619.8
+500,500,10/21/2013,delivered,3/10/2021,55763 Shasta Way,,,,Albania,732.29,credit card,3176.85
+501,501,8/16/2011,pending,7/15/2010,16337 Schurz Trail,,,,Indonesia,287.67,PayPal,3868.22
+502,502,11/8/2020,delivered,2/8/2017,276 Graceland Avenue,,,,Indonesia,976.62,PayPal,2783.51
+503,503,1/31/2019,delivered,9/16/2017,0 Clyde Gallagher Parkway,,,,China,630.9,PayPal,5792.69
+504,504,5/9/2020,shipped,6/29/2011,286 Milwaukee Drive,,,,Japan,432.45,PayPal,5284.99
+505,505,10/21/2013,pending,12/21/2015,97 Ronald Regan Road,,,,United States,772.33,cash on delivery,9211.5
+506,506,4/26/2014,shipped,3/19/2020,32765 La Follette Alley,,,,Tanzania,925.27,cash on delivery,6159.65
+507,507,4/22/2018,pending,11/29/2012,1374 Maple Wood Hill,,,,Russia,917.64,cash on delivery,4683.45
+508,508,12/13/2013,processing,7/27/2010,0363 Carey Place,,,,China,834.18,credit card,1267.92
+509,509,8/29/2016,shipped,1/2/2019,6 Sycamore Way,,,,Portugal,525.28,credit card,584.35
+510,510,4/8/2016,pending,12/3/2014,35 Loomis Park,,,,Russia,859.66,PayPal,9334.88
+511,511,7/23/2014,shipped,5/25/2013,5 Gerald Way,,,,France,685.13,PayPal,9.93
+512,512,9/28/2022,delivered,9/21/2017,365 Anniversary Hill,,,,Portugal,636.22,credit card,4596.22
+513,513,3/26/2015,pending,11/5/2011,4491 Grim Center,,,,Russia,327.4,cash on delivery,9910.45
+514,514,2/19/2019,shipped,5/21/2013,48925 Graceland Point,,,,Panama,615.82,cash on delivery,3067.02
+515,515,4/18/2015,delivered,6/2/2019,7 Spaight Alley,,,,China,263.13,credit card,8700.04
+516,516,12/30/2019,shipped,12/6/2022,6 Florence Lane,,,,Mongolia,853.17,cash on delivery,4091.4
+517,517,6/14/2011,pending,1/17/2012,13863 Service Trail,,,,China,43.93,cash on delivery,2981.03
+518,518,10/10/2010,pending,2/3/2018,58 Butternut Pass,,,,Philippines,226.05,cash on delivery,5930.76
+519,519,5/11/2014,processing,7/17/2011,6572 Jackson Trail,,,,Vietnam,690.39,PayPal,1847.49
+520,520,10/26/2020,shipped,9/4/2017,2 Heffernan Way,,,,Ukraine,347.32,cash on delivery,7077.14
+521,521,7/16/2018,delivered,1/5/2019,675 Kinsman Lane,,,,China,989.65,PayPal,5844.96
+522,522,6/9/2010,shipped,3/7/2021,6327 Almo Trail,,,,Russia,382.84,PayPal,7180.57
+523,523,9/25/2014,delivered,9/10/2021,076 Ramsey Drive,,,,China,895,credit card,1920.2
+524,524,2/2/2011,pending,2/6/2012,3 Village Green Avenue,,,,China,631.81,PayPal,8168.6
+525,525,3/20/2015,processing,12/14/2021,31 Manley Terrace,,,,Indonesia,65.26,credit card,995.51
+526,526,3/20/2017,processing,3/13/2019,71418 Holy Cross Plaza,,,,Malaysia,819.59,credit card,9424.96
+527,527,12/26/2020,delivered,11/2/2013,6 Fair Oaks Hill,,,,Indonesia,971.77,PayPal,5208.33
+528,528,12/9/2011,pending,2/4/2014,10 Sutherland Plaza,,,,China,3.22,cash on delivery,3582.71
+529,529,3/7/2019,shipped,7/8/2020,48284 Melby Pass,,,,Colombia,606.6,PayPal,7820.31
+530,530,4/28/2010,shipped,4/18/2020,35235 Warner Place,,,,Indonesia,649.15,PayPal,2196.48
+531,531,5/12/2022,shipped,12/26/2018,31 Dayton Parkway,,,,Panama,839.99,cash on delivery,6975.8
+532,532,9/7/2020,processing,5/26/2022,6 Cottonwood Lane,,,,China,637.86,cash on delivery,7468.04
+533,533,6/13/2011,pending,8/29/2020,71 Vera Trail,,,,Armenia,411.94,cash on delivery,9633.66
+534,534,4/24/2012,shipped,10/2/2012,79700 Anderson Trail,,,,Indonesia,223.24,PayPal,7781.25
+535,535,4/12/2017,processing,1/2/2012,06 Doe Crossing Way,,,,Norway,384.15,PayPal,9100.11
+536,536,9/10/2015,pending,9/3/2012,94 Quincy Park,,,,Uganda,962.73,credit card,7864.13
+537,537,8/6/2020,pending,12/30/2014,4 Old Gate Crossing,,,,Portugal,44.82,credit card,1116.62
+538,538,8/1/2015,processing,11/20/2010,58 Elgar Junction,,,,China,708.64,credit card,5715.78
+539,539,5/13/2010,shipped,8/9/2015,99968 Carey Terrace,,,,Estonia,704.06,credit card,8924.85
+540,540,1/11/2021,pending,7/4/2018,308 Union Point,,,,Russia,970.98,PayPal,3805.86
+541,541,9/16/2012,shipped,7/3/2018,39 Burning Wood Park,,,,Czech Republic,502.64,PayPal,2854.51
+542,542,7/15/2021,delivered,9/14/2022,2110 Holmberg Terrace,,,,China,199.44,credit card,406.64
+543,543,8/1/2018,pending,12/17/2013,5896 Village Green Hill,,,,Brazil,179.05,PayPal,2267.25
+544,544,3/7/2011,delivered,1/25/2015,203 Westport Hill,,,,China,19.37,credit card,7166.23
+545,545,10/11/2010,delivered,9/24/2020,246 Magdeline Center,,,,United States,839.2,PayPal,9428.55
+546,546,8/2/2019,processing,11/9/2012,2 Hoard Terrace,,,,Indonesia,726.83,credit card,6842.67
+547,547,10/1/2010,shipped,1/24/2013,973 Elmside Street,,,,Ukraine,205,cash on delivery,5957.43
+548,548,10/7/2013,processing,5/2/2013,9787 Barnett Pass,,,,Iran,825.22,PayPal,4655.63
+549,549,11/10/2017,delivered,2/25/2010,03 Lerdahl Park,,,,Ukraine,467.24,credit card,4831.24
+550,550,8/14/2011,shipped,8/1/2012,08 Marquette Terrace,,,,Portugal,312.03,credit card,1559.09
+551,551,3/3/2020,delivered,2/6/2017,72 Forest Dale Terrace,,,,Indonesia,362.89,cash on delivery,3463.33
+552,552,7/29/2020,processing,12/23/2022,614 Garrison Street,,,,Paraguay,667.39,cash on delivery,5793.44
+553,553,4/20/2021,delivered,11/2/2021,604 Burning Wood Junction,,,,Portugal,708.53,credit card,3329.61
+554,554,6/5/2010,shipped,1/7/2016,79 Heath Way,,,,France,560.55,credit card,7304.79
+555,555,4/9/2014,pending,2/6/2017,290 South Junction,,,,France,244.45,PayPal,9448.97
+556,556,9/15/2014,delivered,1/13/2018,2292 Manley Alley,,,,Iran,977.81,credit card,7821.96
+557,557,9/13/2017,shipped,9/13/2016,19037 7th Crossing,,,,Malaysia,75.67,PayPal,346.73
+558,558,12/22/2015,shipped,9/5/2019,311 Dakota Parkway,,,,China,80.55,credit card,7797.3
+559,559,10/20/2011,pending,2/6/2011,14030 Riverside Way,,,,Ukraine,895.95,PayPal,1167.09
+560,560,9/28/2016,shipped,7/9/2013,40767 Sunnyside Lane,,,,Finland,811.58,cash on delivery,7274.38
+561,561,2/22/2019,delivered,1/15/2014,081 Roxbury Drive,,,,Haiti,236.01,cash on delivery,1418.97
+562,562,4/18/2019,pending,1/17/2011,032 West Drive,,,,China,741.65,cash on delivery,3550.05
+563,563,10/28/2020,processing,2/12/2019,93 Fuller Avenue,,,,Philippines,997.29,cash on delivery,7194.03
+564,564,7/2/2021,pending,6/19/2021,25212 Warner Avenue,,,,China,847.34,PayPal,1777.88
+565,565,7/24/2014,pending,3/6/2010,97 Lakewood Pass,,,,Slovenia,657.7,PayPal,6045.36
+566,566,1/16/2014,processing,1/3/2013,07 Mcguire Drive,,,,Peru,712.06,cash on delivery,5819.6
+567,567,3/31/2022,processing,8/4/2010,310 Lawn Crossing,,,,Russia,447.9,PayPal,7703.16
+568,568,9/25/2010,delivered,5/31/2010,81143 Kim Park,,,,Colombia,193.52,PayPal,3625.12
+569,569,11/22/2020,shipped,12/7/2010,8 Graedel Hill,,,,Czech Republic,935.16,credit card,3511.65
+570,570,8/15/2014,processing,11/26/2010,7127 Dapin Center,,,,France,918.7,PayPal,3840.15
+571,571,12/29/2014,processing,6/4/2022,734 Division Hill,,,,Philippines,674.1,credit card,4284.9
+572,572,6/7/2013,delivered,5/30/2013,4 Monterey Junction,,,,China,694.19,PayPal,9891.42
+573,573,4/20/2020,processing,6/5/2011,6 Doe Crossing Plaza,,,,United States,352.56,cash on delivery,4076.17
+574,574,8/4/2017,pending,8/3/2022,22169 Beilfuss Terrace,,,,Armenia,143.73,credit card,4680.05
+575,575,12/14/2012,pending,12/4/2016,5014 Riverside Hill,,,,France,962.22,credit card,1376
+576,576,12/20/2018,pending,4/4/2015,61905 Transport Plaza,,,,Sri Lanka,508.69,credit card,246.32
+577,577,10/27/2014,shipped,12/22/2016,0 Donald Junction,,,,Greece,118.56,cash on delivery,224
+578,578,9/13/2018,processing,1/11/2021,4 Scott Circle,,,,Ukraine,26.19,PayPal,1732.01
+579,579,8/9/2020,shipped,2/2/2018,68 Badeau Terrace,,,,China,351.3,PayPal,5086.89
+580,580,2/4/2018,shipped,5/12/2022,2913 Summer Ridge Junction,,,,Mauritius,940.95,cash on delivery,5582.94
+581,581,8/29/2012,pending,6/14/2010,609 Knutson Circle,,,,China,831.17,PayPal,8639.93
+582,582,12/20/2015,processing,6/1/2012,2044 Towne Court,,,,China,431.79,PayPal,6601.4
+583,583,10/18/2022,pending,6/3/2017,8455 Pine View Drive,,,,Nicaragua,807.02,credit card,7185.13
+584,584,4/25/2015,pending,3/21/2016,87 Eliot Lane,,,,China,850.22,credit card,8747.21
+585,585,4/14/2019,pending,9/15/2018,8 Forest Lane,,,,Brazil,209.24,PayPal,1800.84
+586,586,10/1/2010,delivered,3/25/2016,579 Kim Point,,,,Kazakhstan,642.88,PayPal,4274.11
+587,587,11/2/2020,shipped,4/25/2012,27 Schlimgen Center,,,,Philippines,43.08,cash on delivery,86.33
+588,588,7/16/2018,shipped,11/22/2013,33499 Harbort Place,,,,Indonesia,503.1,cash on delivery,7087.7
+589,589,9/18/2020,pending,10/4/2019,71 Huxley Pass,,,,Ireland,193.72,cash on delivery,1305.08
+590,590,5/1/2011,processing,6/30/2019,1830 Moose Lane,,,,Indonesia,597.75,credit card,5810.53
+591,591,11/1/2022,shipped,6/23/2014,3 Tony Avenue,,,,China,935.39,credit card,2092.01
+592,592,11/24/2021,delivered,5/4/2016,2 Burrows Drive,,,,Indonesia,108.67,credit card,9693.52
+593,593,2/25/2010,processing,8/4/2022,495 7th Place,,,,United States,811.88,credit card,6609.67
+594,594,11/19/2012,shipped,11/26/2020,75610 Fulton Place,,,,Brazil,827.05,cash on delivery,7602.03
+595,595,9/22/2013,pending,11/27/2015,3939 Bluejay Point,,,,Poland,713.49,cash on delivery,810.61
+596,596,3/10/2016,delivered,11/3/2017,81085 Florence Plaza,,,,Sweden,870.77,PayPal,862.61
+597,597,3/4/2017,pending,8/15/2010,44 Crest Line Crossing,,,,Albania,198.52,PayPal,733.34
+598,598,7/24/2014,processing,6/8/2021,37430 Anthes Crossing,,,,Yemen,173.98,credit card,2858.32
+599,599,11/14/2022,pending,12/11/2016,3923 Lawn Parkway,,,,Germany,209.46,PayPal,4948.23
+600,600,9/6/2018,pending,10/9/2022,493 Vermont Junction,,,,Argentina,412.95,cash on delivery,203.45
+601,601,2/22/2018,pending,6/3/2020,48456 Surrey Trail,,,,Indonesia,823.39,credit card,2459.42
+602,602,5/23/2012,processing,4/28/2019,4 La Follette Avenue,,,,Indonesia,6.84,PayPal,7536.21
+603,603,8/19/2015,pending,8/16/2013,67981 Kennedy Avenue,,,,Mexico,220,cash on delivery,2776.18
+604,604,10/5/2011,pending,6/3/2018,8688 Memorial Center,,,,Iran,406.72,credit card,4948.12
+605,605,1/3/2015,delivered,5/14/2016,407 Havey Avenue,,,,China,825.79,credit card,1740.12
+606,606,10/18/2022,delivered,7/7/2016,5610 Pearson Center,,,,Georgia,456.91,PayPal,1398.14
+607,607,9/6/2015,shipped,6/5/2010,278 Doe Crossing Junction,,,,Japan,536.13,PayPal,6822.87
+608,608,2/27/2010,shipped,3/3/2017,33 Fair Oaks Point,,,,China,627.59,credit card,1193.72
+609,609,10/2/2012,pending,1/8/2010,182 Waywood Alley,,,,Brazil,558.99,PayPal,9100.29
+610,610,2/1/2013,pending,8/7/2010,58 Autumn Leaf Alley,,,,China,734.1,PayPal,3490.41
+611,611,2/9/2012,shipped,6/6/2021,55962 Vidon Circle,,,,Tunisia,382.74,credit card,2737.47
+612,612,4/11/2017,pending,4/7/2012,1 Eliot Lane,,,,China,659.46,PayPal,6718.55
+613,613,1/18/2010,shipped,3/20/2014,27 Amoth Alley,,,,Brazil,863.26,PayPal,5444.41
+614,614,4/8/2022,shipped,3/17/2017,523 Meadow Ridge Place,,,,Brazil,542.2,PayPal,177.03
+615,615,1/25/2017,processing,5/16/2017,340 Washington Terrace,,,,China,903.33,cash on delivery,1198.96
+616,616,11/12/2018,shipped,8/26/2018,2 Vermont Lane,,,,Colombia,877.83,PayPal,2067.11
+617,617,7/20/2012,pending,10/16/2020,947 Petterle Pass,,,,Georgia,301.91,PayPal,5243.21
+618,618,10/12/2022,processing,3/25/2015,697 7th Parkway,,,,Indonesia,121.63,cash on delivery,1124.12
+619,619,7/7/2014,pending,11/14/2016,80 Cottonwood Point,,,,Norway,331.9,PayPal,2307.6
+620,620,2/15/2016,shipped,7/23/2010,5 Chinook Trail,,,,Palestinian Territory,376.26,credit card,7973.38
+621,621,3/19/2021,pending,5/20/2017,88365 Elmside Hill,,,,China,842.88,PayPal,8186.51
+622,622,7/2/2022,processing,7/12/2014,0 Bunker Hill Court,,,,Dominican Republic,22.41,credit card,3966.54
+623,623,3/5/2020,pending,3/6/2020,6718 Red Cloud Drive,,,,Russia,203.4,credit card,4943.81
+624,624,11/13/2020,pending,5/25/2010,3 Park Meadow Park,,,,Poland,914.67,credit card,3912.31
+625,625,7/16/2016,delivered,12/30/2019,0 Center Avenue,,,,France,489.39,cash on delivery,3349.12
+626,626,9/10/2012,shipped,8/24/2022,8 Union Court,,,,Brazil,703.39,credit card,9930.55
+627,627,5/28/2013,processing,3/6/2018,34760 Tennyson Park,,,,South Africa,71.39,credit card,8560.4
+628,628,3/2/2013,pending,12/22/2013,2060 Menomonie Way,,,,Sweden,473.26,cash on delivery,7087.41
+629,629,6/28/2018,delivered,12/3/2011,4120 Lillian Road,,,,Japan,443.91,credit card,4586.78
+630,630,11/6/2015,shipped,8/24/2013,1 Doe Crossing Avenue,,,,Samoa,541.25,PayPal,2047.34
+631,631,5/3/2021,delivered,6/4/2016,465 Sauthoff Place,,,,United States,398.12,credit card,8307.14
+632,632,1/29/2017,delivered,6/19/2013,5407 Summerview Center,,,,Japan,108.3,PayPal,6832.29
+633,633,7/20/2015,processing,7/26/2022,4644 Lien Way,,,,Nigeria,308.3,PayPal,3485.94
+634,634,3/31/2014,shipped,3/22/2020,00073 Everett Junction,,,,Philippines,916.67,cash on delivery,1160.35
+635,635,4/17/2013,pending,6/29/2022,8 Mosinee Way,,,,Indonesia,7.79,credit card,7833.05
+636,636,5/10/2019,delivered,12/12/2014,0883 Scott Drive,,,,Thailand,708.33,PayPal,6662.55
+637,637,8/16/2020,processing,3/23/2020,0 Fairview Lane,,,,Indonesia,319.1,PayPal,6877.73
+638,638,9/16/2021,processing,2/13/2011,9 Hermina Park,,,,Morocco,981.27,credit card,8880.65
+639,639,11/1/2018,pending,6/11/2018,32 Manley Hill,,,,Palestinian Territory,36.79,PayPal,575.95
+640,640,1/1/2013,shipped,12/15/2020,1 Service Alley,,,,China,336.94,credit card,5814.24
+641,641,1/20/2019,delivered,12/10/2012,3203 Moose Way,,,,Spain,217.46,PayPal,9444.32
+642,642,2/5/2011,shipped,4/12/2010,6189 Thackeray Way,,,,China,251.73,cash on delivery,8445.69
+643,643,3/14/2012,shipped,7/17/2019,25505 Ruskin Trail,,,,Indonesia,610.55,credit card,2154.23
+644,644,8/8/2020,pending,12/8/2020,84563 Barnett Plaza,,,,China,928.86,credit card,7125.71
+645,645,12/14/2013,processing,11/25/2013,7 Spohn Place,,,,Croatia,311.61,cash on delivery,1275.31
+646,646,9/23/2019,shipped,4/22/2021,9 Pawling Alley,,,,Brazil,210.04,credit card,3429.82
+647,647,10/29/2011,shipped,8/11/2018,14 Fulton Lane,,,,Greece,296.01,credit card,8463.08
+648,648,12/15/2011,processing,1/19/2015,1 Canary Lane,,,,Kyrgyzstan,771.62,credit card,5810.63
+649,649,11/12/2010,pending,9/6/2015,21 Granby Park,,,,China,209.12,PayPal,140.12
+650,650,1/18/2010,delivered,12/7/2010,66628 Schurz Hill,,,,China,624.58,credit card,3397.38
+651,651,4/20/2020,shipped,7/6/2015,417 Bellgrove Plaza,,,,Portugal,549.73,credit card,527.51
+652,652,6/25/2011,pending,11/21/2016,26 Village Green Avenue,,,,France,306.28,credit card,6540.94
+653,653,2/27/2010,processing,12/6/2022,329 Marcy Park,,,,Indonesia,839.68,PayPal,4968.81
+654,654,2/11/2019,delivered,5/11/2020,5 Village Trail,,,,China,665.55,cash on delivery,8291.58
+655,655,6/3/2011,processing,8/11/2015,2456 Roth Way,,,,Serbia,890.78,credit card,2554.63
+656,656,5/1/2019,delivered,11/29/2012,242 Myrtle Way,,,,Saudi Arabia,451.07,PayPal,1800.64
+657,657,10/7/2018,processing,2/5/2012,84 Warrior Circle,,,,Argentina,960.96,credit card,8088.53
+658,658,6/17/2013,delivered,1/14/2018,643 Sunbrook Avenue,,,,Indonesia,491.89,PayPal,9107.06
+659,659,5/12/2022,delivered,2/20/2014,8754 Walton Court,,,,Zambia,407.43,PayPal,1270.1
+660,660,8/2/2019,processing,6/21/2022,91042 Golf View Road,,,,China,367.56,cash on delivery,3256.57
+661,661,7/15/2021,processing,6/29/2018,7494 Stoughton Parkway,,,,Macedonia,808.58,credit card,9320.77
+662,662,6/30/2018,processing,5/28/2013,86744 Bluestem Avenue,,,,Russia,129.89,cash on delivery,1666.45
+663,663,11/2/2016,shipped,10/29/2017,84059 Rusk Court,,,,Indonesia,697.21,PayPal,6944.4
+664,664,6/1/2018,processing,1/8/2010,640 Miller Point,,,,Russia,365.3,PayPal,4843.69
+665,665,6/25/2019,pending,12/3/2015,74 Golf View Crossing,,,,China,212.67,cash on delivery,5413.26
+666,666,9/10/2010,pending,4/29/2010,104 Park Meadow Parkway,,,,Indonesia,845.39,PayPal,527.16
+667,667,7/22/2017,shipped,12/19/2022,3 Truax Avenue,,,,Sweden,718.54,PayPal,5018.96
+668,668,6/4/2021,shipped,6/24/2018,4 Artisan Center,,,,Belarus,392.52,cash on delivery,7746.55
+669,669,3/25/2020,pending,3/15/2017,1 Mallory Way,,,,Poland,515.93,credit card,7672.55
+670,670,2/20/2015,pending,9/9/2014,0 Glendale Street,,,,Poland,741.72,credit card,8350.08
+671,671,12/4/2011,delivered,4/22/2017,064 Melody Road,,,,Czech Republic,940.31,PayPal,7965.57
+672,672,6/2/2013,delivered,12/22/2016,4 Darwin Point,,,,Colombia,461.81,credit card,2556.33
+673,673,10/21/2016,processing,6/29/2022,9596 Rowland Drive,,,,China,613.11,cash on delivery,8546.2
+674,674,9/18/2017,delivered,10/19/2010,57 Paget Junction,,,,China,309.09,cash on delivery,5501.24
+675,675,8/9/2013,delivered,3/9/2015,80317 Bellgrove Circle,,,,Bulgaria,434.01,PayPal,8878.05
+676,676,10/10/2015,delivered,6/25/2017,70 Sherman Drive,,,,Egypt,857.01,cash on delivery,8094.81
+677,677,1/19/2010,delivered,10/15/2016,5 Dahle Road,,,,Indonesia,764.54,PayPal,5822.96
+678,678,6/24/2018,pending,3/2/2012,73917 Basil Street,,,,Indonesia,532.9,cash on delivery,9865
+679,679,11/10/2020,pending,10/21/2018,57 Mccormick Street,,,,Kazakhstan,395.41,PayPal,2146.95
+680,680,3/26/2012,pending,10/26/2015,319 Bartelt Plaza,,,,Peru,952.84,cash on delivery,1712.58
+681,681,5/9/2021,shipped,6/22/2014,185 Reinke Terrace,,,,Honduras,769.51,credit card,2241.56
+682,682,7/2/2017,pending,7/15/2010,2 Manley Place,,,,Indonesia,990.47,PayPal,2611.42
+683,683,9/12/2020,shipped,8/15/2015,0 Tennessee Plaza,,,,Indonesia,321.04,credit card,2231.74
+684,684,1/16/2020,shipped,10/13/2010,251 Orin Circle,,,,Poland,290.43,credit card,6414.98
+685,685,6/12/2014,shipped,7/6/2014,362 Bartillon Place,,,,Peru,593.92,cash on delivery,7669.93
+686,686,5/6/2020,processing,2/8/2013,761 Forest Run Court,,,,Greece,267.36,credit card,2369.69
+687,687,12/10/2015,shipped,6/3/2012,9397 Hovde Circle,,,,Philippines,190.27,credit card,3149.22
+688,688,12/11/2018,pending,10/29/2020,061 Bellgrove Junction,,,,Poland,239.41,cash on delivery,2118.51
+689,689,3/14/2021,delivered,5/19/2021,45 Ronald Regan Court,,,,France,509.15,PayPal,1529.32
+690,690,3/27/2011,processing,2/5/2017,5315 Schiller Pass,,,,Pakistan,367.63,cash on delivery,4746.96
+691,691,3/15/2018,pending,2/7/2012,9549 Fordem Plaza,,,,France,786.14,credit card,1380.85
+692,692,6/20/2011,pending,3/1/2016,34 Shelley Center,,,,China,411.4,credit card,7722.59
+693,693,8/5/2011,pending,3/28/2021,394 Ridge Oak Way,,,,Poland,813.63,cash on delivery,2607.95
+694,694,4/4/2021,delivered,2/1/2016,13993 Kipling Place,,,,Armenia,905.68,PayPal,2401.88
+695,695,5/13/2019,shipped,5/8/2017,69 5th Court,,,,Poland,914.5,PayPal,6640.63
+696,696,1/21/2015,processing,9/18/2020,07 Mayfield Place,,,,Portugal,324.16,cash on delivery,6618.95
+697,697,3/16/2018,delivered,10/14/2020,9090 Darwin Drive,,,,Canada,752.47,PayPal,5830.28
+698,698,12/31/2011,pending,7/21/2010,84028 Gulseth Way,,,,Indonesia,964.34,credit card,2015.91
+699,699,9/1/2020,pending,7/12/2011,7082 Merrick Way,,,,Norway,526.74,PayPal,8824.1
+700,700,6/12/2022,processing,6/23/2019,4813 Lakewood Drive,,,,China,182.75,PayPal,6676.84
+701,701,8/30/2011,processing,6/7/2019,461 Gale Pass,,,,Brazil,265.46,PayPal,757.72
+702,702,4/11/2014,delivered,6/12/2012,4 Melrose Street,,,,Ukraine,667.9,credit card,4808.07
+703,703,8/16/2015,delivered,5/22/2021,50 Trailsway Park,,,,Yemen,155.67,PayPal,3920.25
+704,704,12/24/2021,pending,2/25/2021,4 Grayhawk Junction,,,,Indonesia,906.07,PayPal,3809.07
+705,705,5/10/2015,pending,1/31/2016,6 Debra Pass,,,,France,391.12,PayPal,9832.91
+706,706,3/12/2012,processing,8/9/2017,45 Laurel Lane,,,,Indonesia,29.41,credit card,2106.62
+707,707,6/6/2011,shipped,1/1/2013,24124 Hauk Street,,,,China,942.47,PayPal,8787.89
+708,708,5/24/2013,delivered,1/30/2021,3 Orin Alley,,,,Russia,901.24,credit card,7021.1
+709,709,7/8/2013,pending,9/6/2015,4163 Iowa Way,,,,Albania,699.7,credit card,6342.48
+710,710,6/13/2016,processing,5/9/2020,1719 Fordem Plaza,,,,China,567.06,PayPal,970.46
+711,711,6/24/2012,shipped,10/14/2019,17 Kennedy Street,,,,Russia,533.94,cash on delivery,66.19
+712,712,7/7/2018,shipped,8/22/2016,08 Tennessee Drive,,,,Ukraine,65.09,cash on delivery,2238.38
+713,713,11/15/2010,processing,8/4/2021,1471 Eagle Crest Point,,,,China,521.44,credit card,1251.14
+714,714,11/27/2014,processing,10/26/2015,0143 Northland Court,,,,China,658.79,credit card,6483.74
+715,715,1/26/2015,pending,5/14/2012,945 Cody Hill,,,,China,675.19,credit card,5770.85
+716,716,12/17/2022,pending,3/25/2020,3059 Dwight Park,,,,Philippines,252.88,credit card,1260.43
+717,717,2/29/2020,delivered,9/22/2014,195 Burrows Circle,,,,Mexico,75.35,credit card,2351.84
+718,718,12/10/2016,pending,2/14/2022,4192 Annamark Avenue,,,,Philippines,380.85,credit card,1979.77
+719,719,1/17/2019,pending,7/9/2014,7683 Sage Terrace,,,,Aland Islands,409.63,cash on delivery,4944.52
+720,720,5/2/2018,delivered,9/8/2010,45 Paget Crossing,,,,Madagascar,775.52,credit card,5039.02
+721,721,11/30/2010,processing,4/28/2017,08 Fisk Plaza,,,,Honduras,463.03,PayPal,6878.82
+722,722,9/3/2015,processing,10/24/2021,04 Beilfuss Alley,,,,Malta,393.78,credit card,9979.46
+723,723,1/27/2020,processing,3/20/2011,779 Burrows Pass,,,,Afghanistan,522.84,credit card,4860.84
+724,724,9/10/2017,pending,8/2/2011,50592 Kenwood Center,,,,China,552.03,cash on delivery,7664.22
+725,725,11/25/2021,processing,3/31/2011,3 Magdeline Parkway,,,,France,857.7,PayPal,3981.07
+726,726,9/6/2011,processing,1/22/2018,39 Helena Junction,,,,Morocco,249.23,cash on delivery,4502.33
+727,727,9/27/2017,shipped,1/20/2015,5 Loftsgordon Avenue,,,,China,209.12,PayPal,1872.76
+728,728,8/7/2015,pending,1/24/2012,2 Quincy Plaza,,,,Ethiopia,753.59,PayPal,5563.64
+729,729,2/9/2015,processing,4/22/2015,1 Scott Drive,,,,Philippines,97.14,PayPal,3154.07
+730,730,2/14/2012,delivered,6/28/2013,94 Moulton Terrace,,,,Indonesia,396.61,PayPal,2568.28
+731,731,1/26/2010,delivered,12/23/2011,9 Monterey Pass,,,,Indonesia,429.03,cash on delivery,8019.55
+732,732,5/3/2015,delivered,8/28/2022,82 Sunfield Park,,,,Afghanistan,209.22,credit card,544.23
+733,733,11/3/2021,pending,1/18/2015,8300 Division Junction,,,,China,372.22,PayPal,896.63
+734,734,1/21/2017,shipped,12/28/2021,4 Shopko Center,,,,Brazil,177.9,cash on delivery,3710.37
+735,735,12/19/2017,processing,2/1/2012,740 Old Gate Way,,,,Brazil,841.92,cash on delivery,1901
+736,736,11/29/2014,shipped,12/10/2018,3 Warrior Park,,,,Uruguay,487.43,credit card,5544.23
+737,737,3/1/2019,shipped,5/3/2022,33945 Russell Park,,,,Kuwait,642.04,credit card,1944.64
+738,738,5/8/2011,processing,6/2/2014,69914 Nelson Street,,,,Canada,810.84,credit card,7616.12
+739,739,12/19/2017,processing,12/21/2012,600 Lakewood Point,,,,United States,266.21,cash on delivery,573.11
+740,740,2/25/2014,shipped,5/9/2012,525 Hallows Trail,,,,China,377.22,credit card,3802.64
+741,741,7/23/2012,delivered,4/10/2011,0092 Sage Road,,,,Czech Republic,529.72,cash on delivery,3410.96
+742,742,2/21/2013,processing,8/10/2011,9287 Menomonie Place,,,,Sweden,428.35,cash on delivery,1041.63
+743,743,7/6/2010,shipped,1/22/2010,54 Melrose Point,,,,Brazil,139.46,credit card,7662.96
+744,744,11/15/2010,processing,11/9/2018,72712 Alpine Drive,,,,Haiti,271.6,credit card,4008.76
+745,745,7/8/2013,pending,7/8/2011,84751 Elmside Terrace,,,,Poland,180.98,PayPal,6605.34
+746,746,3/11/2014,shipped,2/21/2013,15 Garrison Center,,,,Honduras,485.58,credit card,2631.04
+747,747,12/7/2011,shipped,4/5/2017,38295 Transport Road,,,,Tunisia,162.6,credit card,6515.34
+748,748,3/9/2011,shipped,4/8/2013,33146 Barby Road,,,,Russia,676.42,credit card,9676.46
+749,749,9/1/2016,delivered,11/13/2021,948 Dottie Road,,,,Montenegro,513.57,credit card,8216.71
+750,750,5/10/2010,processing,2/1/2010,00175 Bunker Hill Way,,,,Russia,483.54,cash on delivery,6580.43
+751,751,5/5/2011,delivered,3/20/2019,75185 Bobwhite Street,,,,Brazil,16.79,PayPal,1424.94
+752,752,2/17/2018,pending,8/13/2015,4 6th Drive,,,,Sweden,251.64,PayPal,5968.01
+753,753,6/12/2011,pending,8/19/2022,44773 Daystar Center,,,,United States,898.09,PayPal,7695.25
+754,754,12/3/2015,processing,6/23/2018,8 Kings Road,,,,China,468.61,cash on delivery,111.51
+755,755,8/31/2017,shipped,11/11/2019,2941 Moulton Way,,,,Netherlands,954.52,PayPal,6933.48
+756,756,7/16/2016,shipped,5/19/2017,6065 Rowland Way,,,,China,573.05,cash on delivery,4710.18
+757,757,6/16/2010,shipped,1/30/2019,652 Forest Pass,,,,China,34.3,cash on delivery,1872.26
+758,758,9/18/2020,delivered,12/31/2017,152 Brickson Park Avenue,,,,Paraguay,491.89,PayPal,2266.03
+759,759,8/10/2011,pending,6/7/2016,4697 Donald Alley,,,,Brazil,660.28,PayPal,9731.2
+760,760,12/4/2014,pending,8/24/2010,40875 Lien Avenue,,,,Russia,52.51,PayPal,6017.95
+761,761,8/25/2016,pending,10/9/2022,8524 Paget Junction,,,,France,491.02,PayPal,2021.8
+762,762,3/4/2019,pending,7/28/2015,1672 Lotheville Point,,,,Colombia,154.89,cash on delivery,3031.49
+763,763,5/11/2019,pending,6/16/2014,150 Melrose Street,,,,Indonesia,831.36,PayPal,6885.94
+764,764,5/19/2015,processing,9/10/2022,12 Rigney Parkway,,,,Brazil,394.16,PayPal,2254.11
+765,765,9/13/2019,pending,10/12/2013,034 Quincy Circle,,,,South Africa,527.02,PayPal,5432.95
+766,766,9/3/2014,shipped,7/20/2020,0683 Norway Maple Place,,,,Kazakhstan,645.56,credit card,8614.79
+767,767,3/1/2019,processing,11/21/2022,56038 Brown Street,,,,Jamaica,735.13,cash on delivery,7052.38
+768,768,3/31/2019,shipped,5/5/2017,61 Meadow Ridge Avenue,,,,Palestinian Territory,432.1,PayPal,838.21
+769,769,3/2/2015,processing,7/6/2018,252 Bunker Hill Point,,,,China,800.15,cash on delivery,240.81
+770,770,3/31/2016,delivered,6/30/2010,537 Carey Parkway,,,,China,11.75,credit card,3065.07
+771,771,7/18/2021,shipped,5/5/2013,42 Birchwood Parkway,,,,Philippines,656.85,PayPal,3254.19
+772,772,3/14/2020,pending,9/24/2017,39700 Delaware Way,,,,Serbia,735.13,cash on delivery,2165.66
+773,773,7/29/2010,shipped,1/2/2020,2906 Butternut Court,,,,Portugal,760.36,credit card,2872.56
+774,774,7/30/2011,pending,6/24/2010,57 Clove Terrace,,,,Brazil,125.77,PayPal,1595.54
+775,775,3/22/2015,processing,8/13/2015,5 Bartillon Center,,,,Sweden,512.05,credit card,5389.09
+776,776,7/29/2017,delivered,7/20/2013,159 David Center,,,,Mexico,306.1,credit card,4510.25
+777,777,2/8/2019,delivered,5/8/2017,414 Homewood Street,,,,China,773.03,cash on delivery,7878.09
+778,778,1/22/2018,shipped,10/17/2012,77810 Rockefeller Point,,,,Portugal,679.4,cash on delivery,1342.19
+779,779,7/31/2021,shipped,11/21/2011,17002 Brickson Park Place,,,,Brazil,392.04,PayPal,566.67
+780,780,3/19/2016,pending,11/27/2018,554 Jenifer Hill,,,,Indonesia,840.21,credit card,5064.96
+781,781,8/1/2018,shipped,2/15/2021,177 Portage Center,,,,China,698.42,cash on delivery,6625.19
+782,782,7/9/2019,shipped,9/20/2013,69 Chinook Plaza,,,,Portugal,360.86,cash on delivery,3578.45
+783,783,12/26/2012,processing,4/16/2011,14 Doe Crossing Pass,,,,Bahamas,940.64,cash on delivery,7798.6
+784,784,10/22/2022,processing,1/14/2018,58959 Arrowood Place,,,,United States,393.91,PayPal,682.63
+785,785,2/24/2018,shipped,2/14/2019,81 Holmberg Lane,,,,China,316.95,PayPal,6080.76
+786,786,10/15/2013,pending,8/23/2010,8 Butterfield Avenue,,,,China,484.28,cash on delivery,1221.66
+787,787,5/1/2020,shipped,5/12/2018,078 Hooker Road,,,,Spain,937.02,cash on delivery,331.7
+788,788,6/13/2018,pending,8/3/2021,9588 Hoepker Hill,,,,Philippines,531.86,credit card,4066.19
+789,789,3/26/2020,pending,7/4/2021,794 Dottie Court,,,,Zimbabwe,951.02,credit card,4667.38
+790,790,10/15/2013,pending,12/19/2013,4 Esker Alley,,,,Indonesia,361.73,PayPal,4380.1
+791,791,7/23/2017,processing,1/20/2014,5 Blackbird Trail,,,,Netherlands,708.13,cash on delivery,173.69
+792,792,10/28/2014,pending,7/3/2019,980 Drewry Way,,,,Cyprus,98.44,cash on delivery,5509.88
+793,793,12/11/2022,shipped,2/15/2012,63703 Clove Point,,,,China,634.19,credit card,5683.9
+794,794,2/29/2016,delivered,6/7/2020,598 Hanover Circle,,,,Poland,155.06,PayPal,5599.57
+795,795,5/17/2022,shipped,10/27/2010,7 Ridge Oak Place,,,,Brazil,388.14,PayPal,7627.49
+796,796,2/26/2014,processing,6/17/2012,427 Comanche Court,,,,Colombia,173.59,PayPal,8188.08
+797,797,8/21/2011,pending,12/17/2015,4 Anthes Circle,,,,Argentina,407.6,cash on delivery,8509.92
+798,798,6/18/2013,processing,2/8/2020,287 Northwestern Plaza,,,,Uganda,450.4,cash on delivery,8164.8
+799,799,7/21/2016,pending,1/2/2022,95183 Kim Center,,,,United States,188.49,credit card,8751.33
+800,800,10/18/2015,delivered,3/20/2018,362 Shopko Terrace,,,,Colombia,113.77,PayPal,7357.68
+801,801,1/1/2021,pending,9/20/2014,2553 Stuart Circle,,,,Iran,923.55,credit card,1343.22
+802,802,4/28/2014,delivered,4/12/2021,18259 Calypso Alley,,,,China,936.41,cash on delivery,2440.41
+803,803,1/18/2010,delivered,9/17/2019,392 Drewry Lane,,,,Colombia,755.3,PayPal,8902.2
+804,804,9/5/2019,delivered,10/2/2018,2 Bay Street,,,,Japan,910.49,PayPal,4454.82
+805,805,10/6/2013,shipped,2/17/2014,612 Pepper Wood Way,,,,Peru,601.29,credit card,7230.11
+806,806,4/15/2022,pending,1/29/2018,4 5th Parkway,,,,Indonesia,159.89,cash on delivery,9029.36
+807,807,6/12/2014,delivered,12/7/2021,4887 Mockingbird Place,,,,Mongolia,43.53,credit card,6298.86
+808,808,3/14/2020,delivered,8/20/2017,13728 Algoma Park,,,,Kyrgyzstan,537.59,credit card,148.15
+809,809,9/29/2016,processing,8/7/2021,4 Kennedy Trail,,,,Poland,303.39,PayPal,5588.85
+810,810,5/1/2020,delivered,3/20/2021,21 Lakewood Lane,,,,Philippines,889.36,credit card,9175.33
+811,811,9/6/2012,shipped,5/21/2021,5054 Glacier Hill Center,,,,Trinidad and Tobago,428.3,PayPal,5094.62
+812,812,9/26/2014,processing,5/15/2021,11163 Maple Wood Drive,,,,North Korea,744.79,cash on delivery,4340.95
+813,813,9/29/2010,pending,3/15/2017,94441 Pleasure Center,,,,Sweden,858.55,credit card,4308.78
+814,814,5/18/2011,shipped,2/27/2013,4949 Kipling Center,,,,Portugal,659.69,credit card,8778.69
+815,815,1/21/2019,processing,3/18/2020,65672 Norway Maple Way,,,,Indonesia,944.65,credit card,4880.8
+816,816,7/23/2019,pending,10/5/2014,1 Colorado Junction,,,,China,128.9,cash on delivery,6293.06
+817,817,9/9/2013,delivered,6/28/2017,4495 Sheridan Road,,,,Indonesia,422.89,PayPal,1310.63
+818,818,3/3/2010,processing,2/20/2020,4 Hanover Street,,,,Sweden,951.34,cash on delivery,712.98
+819,819,3/23/2017,shipped,5/24/2015,97 Victoria Place,,,,Vietnam,92.38,PayPal,7285.94
+820,820,3/5/2016,processing,10/28/2016,18 Tomscot Pass,,,,United Kingdom,870.91,PayPal,2321.93
+821,821,6/17/2020,pending,2/21/2020,2517 Anthes Court,,,,China,188.96,cash on delivery,4995.21
+822,822,8/28/2022,processing,11/13/2016,4 Miller Terrace,,,,Indonesia,265.1,credit card,8846
+823,823,3/20/2021,pending,11/5/2010,2 Hayes Terrace,,,,Pakistan,287.61,credit card,1219.15
+824,824,11/17/2010,processing,2/18/2011,6787 Warner Junction,,,,Dominican Republic,112.29,credit card,8921.15
+825,825,1/16/2014,pending,4/3/2012,1 Sachtjen Drive,,,,Colombia,501.62,PayPal,4112.53
+826,826,3/9/2020,shipped,12/27/2019,9796 Welch Drive,,,,Yemen,543.03,cash on delivery,6786.72
+827,827,6/13/2013,shipped,7/28/2013,77050 Dunning Crossing,,,,Guatemala,28.72,cash on delivery,8404.25
+828,828,6/16/2019,delivered,7/23/2012,516 Glacier Hill Drive,,,,Brazil,984.97,cash on delivery,931.97
+829,829,3/18/2020,delivered,9/21/2022,51 Artisan Point,,,,France,120.81,PayPal,2630.99
+830,830,10/20/2020,pending,8/25/2012,313 Sachs Lane,,,,China,560.11,PayPal,777.19
+831,831,6/8/2014,delivered,10/20/2020,03 Union Junction,,,,Yemen,136.94,PayPal,2733.67
+832,832,6/16/2010,pending,12/22/2021,4 Thompson Place,,,,Guinea,207.56,PayPal,194.74
+833,833,2/17/2016,shipped,4/2/2011,94 6th Trail,,,,Moldova,879.89,PayPal,921.83
+834,834,8/6/2016,shipped,7/24/2018,060 Almo Place,,,,Uganda,202.48,PayPal,2465.49
+835,835,3/11/2010,pending,9/30/2013,2 Northridge Point,,,,Malaysia,954.98,PayPal,1948.19
+836,836,11/2/2015,processing,3/4/2021,51 Dottie Pass,,,,Russia,720.02,cash on delivery,9685.69
+837,837,8/22/2021,delivered,9/23/2021,64 Lindbergh Point,,,,Morocco,75.79,PayPal,4308.27
+838,838,1/17/2021,delivered,8/10/2020,637 Charing Cross Court,,,,Philippines,424.35,credit card,2238.45
+839,839,4/23/2011,delivered,10/13/2021,93292 Coolidge Pass,,,,Greece,282.01,PayPal,8328.73
+840,840,10/20/2021,processing,6/18/2020,5 Sachs Pass,,,,Russia,728.45,cash on delivery,4189.13
+841,841,5/26/2015,pending,9/16/2020,06063 Spenser Center,,,,China,824.16,cash on delivery,7330.61
+842,842,5/9/2012,shipped,6/18/2021,07 Upham Way,,,,Indonesia,969.25,cash on delivery,5957.32
+843,843,11/3/2020,pending,9/12/2019,50 Hayes Park,,,,Botswana,247.8,cash on delivery,9835.66
+844,844,3/2/2015,processing,9/4/2018,5441 Crownhardt Avenue,,,,China,597.62,PayPal,994.05
+845,845,11/25/2019,pending,6/16/2017,79035 Ilene Crossing,,,,Serbia,427.85,PayPal,9946
+846,846,4/9/2015,delivered,1/8/2019,8 Continental Avenue,,,,Georgia,164.87,credit card,701.52
+847,847,8/20/2017,delivered,9/19/2011,033 Harbort Center,,,,Ivory Coast,227.65,credit card,950.7
+848,848,6/9/2014,delivered,8/13/2010,094 Veith Alley,,,,Bulgaria,452.35,cash on delivery,4396.21
+849,849,10/6/2020,pending,12/4/2017,99 Helena Lane,,,,Guatemala,80.47,PayPal,7477.21
+850,850,11/25/2021,delivered,9/5/2019,990 Fuller Road,,,,Canada,233.24,PayPal,6831.17
+851,851,1/27/2011,shipped,12/30/2015,580 Ronald Regan Alley,,,,Russia,953.11,cash on delivery,5343.06
+852,852,4/17/2021,pending,6/10/2013,741 Shopko Circle,,,,Philippines,274.56,cash on delivery,1571.07
+853,853,2/26/2018,delivered,8/26/2020,79882 Russell Lane,,,,Bolivia,400.07,cash on delivery,5662.92
+854,854,6/30/2021,pending,2/8/2016,03369 Buena Vista Junction,,,,Brazil,748.16,cash on delivery,9310.82
+855,855,11/10/2022,pending,10/26/2019,1766 Spohn Alley,,,,Brazil,394.98,credit card,9900.03
+856,856,10/14/2011,pending,11/11/2021,63381 Meadow Vale Pass,,,,Canada,738.52,credit card,740.09
+857,857,1/15/2017,delivered,6/20/2020,49107 Warner Way,,,,Japan,233.06,credit card,4380.36
+858,858,6/25/2021,shipped,7/28/2010,1945 Superior Court,,,,Albania,846.73,credit card,3207.44
+859,859,11/13/2018,pending,6/30/2020,76 Evergreen Alley,,,,China,650.21,cash on delivery,2109.29
+860,860,1/12/2012,processing,4/3/2011,95 Colorado Pass,,,,South Africa,353.55,cash on delivery,8083.66
+861,861,11/9/2014,delivered,3/5/2017,70 Scofield Road,,,,Saudi Arabia,69.05,cash on delivery,794.36
+862,862,10/30/2012,delivered,7/2/2010,816 Coleman Center,,,,South Africa,391.13,cash on delivery,9773.72
+863,863,7/1/2010,delivered,12/18/2016,90 Shelley Crossing,,,,Sweden,352.05,PayPal,1744.2
+864,864,3/11/2010,shipped,3/17/2012,7 Sherman Drive,,,,Greece,780.01,PayPal,4231.92
+865,865,11/16/2022,delivered,11/22/2020,22 Gulseth Center,,,,Russia,100.95,PayPal,2414.15
+866,866,5/24/2013,delivered,9/20/2016,2722 Golden Leaf Parkway,,,,Dominican Republic,2.26,credit card,740.58
+867,867,2/24/2015,shipped,11/22/2013,238 Artisan Park,,,,Albania,558.05,PayPal,4273.79
+868,868,4/11/2018,processing,10/23/2019,68 Norway Maple Avenue,,,,Colombia,55.05,PayPal,492.42
+869,869,4/25/2020,processing,10/23/2014,890 Buena Vista Circle,,,,Ukraine,638.23,PayPal,7471.85
+870,870,6/24/2018,shipped,6/4/2020,24051 Prentice Court,,,,Argentina,308.01,PayPal,1659.88
+871,871,9/10/2010,pending,11/11/2011,42358 Bartillon Lane,,,,Portugal,188.99,PayPal,9500.55
+872,872,4/15/2018,delivered,1/1/2018,79250 Dottie Court,,,,Australia,350.28,credit card,4738.96
+873,873,7/21/2020,delivered,12/2/2015,2 Reinke Drive,,,,Serbia,643.35,cash on delivery,2813.01
+874,874,11/7/2022,pending,3/22/2014,39353 Lakewood Place,,,,China,100.85,cash on delivery,365.35
+875,875,11/27/2021,pending,9/26/2013,947 Montana Place,,,,Russia,853,cash on delivery,9413.1
+876,876,9/10/2016,shipped,9/23/2014,0600 Hallows Street,,,,China,86.82,PayPal,1256.6
+877,877,11/29/2020,shipped,1/8/2017,8 Macpherson Center,,,,Portugal,375.76,cash on delivery,8326.28
+878,878,11/24/2017,pending,3/18/2019,667 Raven Drive,,,,China,125.48,credit card,1927.42
+879,879,8/30/2010,pending,1/31/2011,1 Ridgeway Park,,,,United States,482.71,PayPal,9824.83
+880,880,2/5/2020,delivered,4/26/2016,81555 Northview Hill,,,,Canada,82.67,PayPal,417.14
+881,881,11/22/2017,pending,1/21/2017,3 Ryan Pass,,,,Philippines,979.77,cash on delivery,5699.75
+882,882,7/15/2016,shipped,4/17/2010,45 Meadow Ridge Street,,,,Sweden,337.42,PayPal,776.92
+883,883,4/28/2011,pending,4/6/2020,52 Dwight Road,,,,Sweden,645.93,PayPal,9530.74
+884,884,10/7/2018,processing,12/29/2016,2699 Eastlawn Circle,,,,Poland,626.5,PayPal,1630.7
+885,885,5/24/2017,delivered,7/18/2020,331 Tennessee Place,,,,Zambia,43.22,cash on delivery,3959.62
+886,886,7/23/2011,delivered,3/21/2018,808 School Avenue,,,,China,368.75,PayPal,3213.37
+887,887,1/5/2016,shipped,12/27/2011,937 Oakridge Street,,,,United States,972.9,PayPal,1287.9
+888,888,11/21/2016,shipped,11/2/2018,69479 Manufacturers Junction,,,,China,101.76,cash on delivery,4764.11
+889,889,1/22/2013,pending,1/3/2014,15 Vera Point,,,,Poland,91.59,credit card,3254.22
+890,890,3/6/2014,delivered,9/2/2013,4 Brown Parkway,,,,Ghana,578.47,PayPal,915.61
+891,891,8/18/2015,processing,8/16/2014,46815 Schlimgen Court,,,,Luxembourg,198.22,cash on delivery,3826.5
+892,892,3/17/2021,delivered,7/30/2010,439 Lillian Parkway,,,,Zimbabwe,536.22,cash on delivery,6315.44
+893,893,8/4/2020,delivered,10/12/2013,84266 Crownhardt Place,,,,Mexico,463.22,credit card,2636.54
+894,894,12/31/2015,delivered,5/29/2014,00 Dixon Place,,,,Brazil,371.63,credit card,4151.37
+895,895,3/7/2010,delivered,6/3/2010,9219 Welch Road,,,,Philippines,329.35,cash on delivery,4784.2
+896,896,2/8/2017,processing,7/7/2021,705 Maple Wood Point,,,,Macedonia,745.81,cash on delivery,5179.31
+897,897,9/28/2020,pending,5/21/2020,935 Mayer Way,,,,Portugal,985.08,credit card,2092.03
+898,898,5/18/2020,pending,3/22/2015,9 Barby Hill,,,,Croatia,993.16,cash on delivery,6734.26
+899,899,6/22/2018,delivered,11/16/2015,44672 Grim Circle,,,,China,828.18,cash on delivery,2817
+900,900,10/14/2016,processing,7/27/2013,6175 Paget Lane,,,,Peru,496.67,PayPal,9355.07
+901,901,9/15/2018,processing,4/24/2012,17 Calypso Trail,,,,Greece,211.08,cash on delivery,575.6
+902,902,7/15/2016,delivered,12/31/2013,0 Basil Crossing,,,,Philippines,806.49,cash on delivery,1463.58
+903,903,1/10/2019,delivered,6/12/2013,79 Park Meadow Way,,,,North Korea,687.19,PayPal,370.92
+904,904,6/11/2022,processing,4/20/2018,32457 Old Shore Street,,,,Bulgaria,539.21,cash on delivery,3474.95
+905,905,2/8/2016,shipped,7/27/2021,3 Comanche Avenue,,,,China,913.88,PayPal,5383.17
+906,906,6/12/2010,processing,7/30/2018,750 Fuller Drive,,,,China,628.91,credit card,5515.84
+907,907,2/18/2019,processing,12/30/2022,5858 Merchant Center,,,,Indonesia,95.24,cash on delivery,3738.94
+908,908,11/7/2020,processing,10/25/2019,1 Delaware Plaza,,,,Indonesia,89.79,PayPal,6697.32
+909,909,9/8/2013,shipped,12/7/2013,73542 Fieldstone Parkway,,,,Argentina,621.71,PayPal,88.35
+910,910,3/28/2013,pending,9/19/2019,1770 Atwood Terrace,,,,Indonesia,353.8,credit card,6535.26
+911,911,10/5/2012,pending,10/8/2015,80228 Harper Crossing,,,,China,217.51,credit card,2165.04
+912,912,8/3/2016,shipped,12/31/2016,4 Fieldstone Way,,,,Brazil,471.83,cash on delivery,2212.35
+913,913,5/17/2021,shipped,6/28/2016,210 Ridge Oak Way,,,,Poland,840.92,cash on delivery,2992.45
+914,914,8/5/2012,processing,9/17/2014,6 Carey Parkway,,,,China,686.91,PayPal,2531.77
+915,915,4/16/2016,pending,7/30/2013,97820 Hintze Junction,,,,Haiti,4.77,PayPal,7130.48
+916,916,11/29/2012,delivered,1/31/2021,88 Manley Parkway,,,,Spain,337.48,cash on delivery,3214.86
+917,917,5/11/2021,pending,6/26/2022,918 Macpherson Avenue,,,,China,87.11,credit card,9816.33
+918,918,11/4/2012,processing,4/25/2015,997 Gale Crossing,,,,Indonesia,244.65,cash on delivery,2159.87
+919,919,6/25/2014,delivered,12/28/2020,3206 Kim Alley,,,,Indonesia,443.43,PayPal,848.72
+920,920,5/1/2018,processing,2/17/2022,4103 Vera Alley,,,,Brazil,80.17,cash on delivery,5092.18
+921,921,4/26/2015,shipped,5/17/2012,3606 Declaration Pass,,,,Mexico,832.04,PayPal,3640.06
+922,922,9/7/2022,shipped,8/18/2013,27 Hudson Center,,,,China,629.77,PayPal,6129.25
+923,923,8/27/2019,shipped,3/5/2018,2334 Thierer Court,,,,China,530.28,credit card,5105.85
+924,924,6/27/2011,shipped,12/1/2017,89050 Crownhardt Way,,,,China,824.97,cash on delivery,7846.14
+925,925,3/15/2010,shipped,8/5/2017,1 Rigney Court,,,,Japan,931.12,PayPal,8510.11
+926,926,5/15/2012,shipped,12/17/2019,86 Norway Maple Way,,,,Japan,672.74,credit card,5051.69
+927,927,7/13/2012,shipped,2/4/2017,32 Northfield Plaza,,,,Russia,640.76,credit card,3706.13
+928,928,8/15/2021,pending,12/5/2014,9779 Schmedeman Lane,,,,Portugal,594.92,cash on delivery,6614.9
+929,929,10/8/2019,pending,12/23/2022,48 4th Avenue,,,,China,193.46,cash on delivery,8100.45
+930,930,7/17/2015,pending,1/8/2011,4 Magdeline Parkway,,,,Serbia,938.7,credit card,3851.17
+931,931,3/3/2019,processing,10/8/2010,61 Reindahl Plaza,,,,China,132.92,PayPal,3474.64
+932,932,11/10/2020,processing,9/28/2017,9 Blaine Park,,,,Greece,991.86,PayPal,8109.65
+933,933,5/5/2020,delivered,6/17/2021,42 Talisman Junction,,,,China,343,credit card,3327.79
+934,934,6/26/2022,shipped,2/24/2015,454 Armistice Park,,,,Lithuania,823.35,PayPal,149.15
+935,935,11/27/2010,pending,10/10/2013,36197 Hoffman Parkway,,,,China,918.11,credit card,771.44
+936,936,4/13/2014,pending,10/7/2019,64 Blaine Circle,,,,Philippines,426.95,PayPal,5876.39
+937,937,4/4/2015,delivered,3/31/2013,2471 Northland Place,,,,Sweden,582.46,credit card,6850.4
+938,938,7/19/2015,shipped,2/16/2013,17 Melody Parkway,,,,Mauritius,488.62,PayPal,8376.76
+939,939,12/30/2015,pending,4/15/2014,83 Sundown Crossing,,,,Russia,999.93,cash on delivery,7106.25
+940,940,2/15/2017,shipped,10/27/2013,8 Westerfield Road,,,,China,48.29,cash on delivery,7120.72
+941,941,2/26/2022,processing,3/1/2013,2 Bellgrove Terrace,,,,China,839.41,PayPal,1910.12
+942,942,8/21/2019,delivered,3/20/2012,98 Anderson Center,,,,China,470.38,cash on delivery,8880.61
+943,943,6/24/2017,processing,6/21/2010,8737 Mifflin Point,,,,Netherlands,78.1,credit card,3585.33
+944,944,11/14/2017,shipped,3/27/2018,95585 Hoepker Lane,,,,Philippines,860.86,credit card,2521.01
+945,945,4/5/2020,processing,7/17/2015,01 Randy Place,,,,Argentina,250.95,cash on delivery,3864.54
+946,946,2/17/2019,shipped,12/25/2012,926 Summerview Court,,,,China,222.2,credit card,6480.96
+947,947,12/23/2014,shipped,2/20/2020,847 Glendale Hill,,,,China,76.95,credit card,1319.55
+948,948,9/19/2013,processing,12/1/2014,19 School Lane,,,,China,956.78,PayPal,5189.66
+949,949,9/1/2014,pending,11/9/2017,03 Hoard Terrace,,,,China,474.65,PayPal,2564.85
+950,950,5/5/2017,shipped,7/28/2015,2 International Terrace,,,,Nigeria,727.94,credit card,6256.87
+951,951,4/20/2018,processing,1/12/2022,25088 Dayton Drive,,,,Mongolia,918.61,cash on delivery,8072.33
+952,952,9/9/2021,pending,9/7/2022,200 Stang Hill,,,,Poland,236.03,cash on delivery,3243.97
+953,953,1/12/2019,shipped,1/19/2010,62 Troy Way,,,,Kenya,461.25,PayPal,1294.07
+954,954,5/8/2010,pending,5/5/2019,57826 Haas Trail,,,,Brazil,266.33,credit card,7483.16
+955,955,1/13/2011,pending,2/20/2013,4 Glacier Hill Drive,,,,Syria,207.01,cash on delivery,1764.95
+956,956,5/5/2016,delivered,11/8/2019,0128 Hooker Plaza,,,,China,86.25,cash on delivery,1680.49
+957,957,1/4/2018,processing,11/17/2018,52 Quincy Center,,,,Poland,631.62,credit card,1050.14
+958,958,8/24/2015,pending,11/6/2014,7 Sutteridge Hill,,,,Brazil,857.3,cash on delivery,1662.06
+959,959,8/13/2015,delivered,6/16/2013,9141 Utah Parkway,,,,Indonesia,542.43,PayPal,8444.04
+960,960,4/1/2014,shipped,6/9/2011,07 Pierstorff Junction,,,,Czech Republic,963.73,cash on delivery,6948.51
+961,961,12/29/2016,pending,1/24/2012,8959 Lawn Plaza,,,,Palestinian Territory,215.34,cash on delivery,375.04
+962,962,11/9/2017,shipped,9/13/2017,28103 Annamark Park,,,,China,134.66,credit card,6714.88
+963,963,3/31/2015,processing,9/2/2013,631 Welch Road,,,,Uganda,476.18,cash on delivery,8560.56
+964,964,4/4/2012,pending,9/6/2018,329 Arrowood Lane,,,,Portugal,268.75,credit card,1472.19
+965,965,8/2/2016,shipped,11/7/2017,0 Cody Point,,,,Germany,844.34,cash on delivery,5386.81
+966,966,4/6/2010,delivered,9/7/2011,10 Glacier Hill Way,,,,Indonesia,938.04,credit card,6329.07
+967,967,1/3/2022,delivered,8/21/2010,4678 Hoepker Avenue,,,,Albania,447.32,PayPal,2138.63
+968,968,11/19/2016,shipped,4/18/2016,16612 Northfield Parkway,,,,Philippines,750.06,PayPal,3389.69
+969,969,12/22/2011,shipped,9/19/2015,557 Clemons Plaza,,,,Canada,233.68,PayPal,4703.19
+970,970,4/30/2010,pending,4/16/2012,0348 Tennessee Crossing,,,,Brazil,501.79,cash on delivery,1402.62
+971,971,2/6/2018,delivered,1/31/2018,7 Arizona Point,,,,Indonesia,501.55,cash on delivery,5646.74
+972,972,9/23/2019,delivered,11/20/2014,3 Hansons Avenue,,,,China,496.57,PayPal,2286.22
+973,973,1/1/2021,delivered,10/29/2020,2 Warrior Trail,,,,China,758.27,credit card,818.79
+974,974,5/15/2022,shipped,5/15/2020,41 Shoshone Trail,,,,Pakistan,853.03,credit card,9376.04
+975,975,3/18/2010,processing,11/17/2010,7 Northridge Street,,,,China,392.46,PayPal,7242.24
+976,976,3/7/2010,pending,10/20/2022,5 Del Mar Place,,,,Portugal,339.43,PayPal,1283.08
+977,977,2/8/2016,delivered,10/14/2017,2303 Fulton Parkway,,,,Venezuela,558.75,credit card,7070.24
+978,978,5/5/2018,delivered,8/29/2021,8738 Steensland Trail,,,,Thailand,727.75,cash on delivery,8838.01
+979,979,5/6/2020,pending,1/30/2021,43192 Sheridan Plaza,,,,Canada,103.33,credit card,8516.08
+980,980,12/26/2018,shipped,6/24/2010,9595 Village Hill,,,,Sweden,513.43,PayPal,7560.93
+981,981,1/21/2015,processing,11/6/2011,4546 Merchant Center,,,,Philippines,127.17,cash on delivery,6342.45
+982,982,12/6/2016,pending,4/30/2020,769 Crownhardt Place,,,,Armenia,990.63,PayPal,9538.5
+983,983,2/17/2022,pending,2/6/2015,08 Marcy Alley,,,,Lithuania,751.31,PayPal,447.74
+984,984,5/23/2012,pending,10/4/2022,452 Kipling Circle,,,,Macedonia,795.59,credit card,8500.38
+985,985,4/10/2019,processing,10/25/2012,411 Clove Terrace,,,,Philippines,31.25,cash on delivery,5322.45
+986,986,1/19/2011,shipped,5/25/2013,731 Little Fleur Court,,,,Vietnam,518.62,PayPal,4452.91
+987,987,3/7/2019,shipped,5/8/2019,164 Morrow Pass,,,,Sweden,558.05,PayPal,7984.5
+988,988,5/3/2011,processing,11/1/2020,2 Mcbride Junction,,,,Brazil,976.37,credit card,8776.67
+989,989,1/16/2022,delivered,6/7/2019,016 Ryan Point,,,,Portugal,249.29,credit card,5543.64
+990,990,7/20/2014,delivered,12/9/2019,59 Ryan Place,,,,Indonesia,879.02,PayPal,9197.24
+991,991,5/27/2018,processing,8/18/2021,04 Continental Junction,,,,China,532.44,PayPal,2970.77
+992,992,5/22/2020,shipped,9/11/2018,04 Coolidge Junction,,,,China,21.47,credit card,7554.4
+993,993,9/9/2014,processing,12/13/2012,5931 Corscot Way,,,,Colombia,832.85,PayPal,59.11
+994,994,8/7/2014,shipped,1/6/2012,1431 Vermont Junction,,,,Peru,185.16,PayPal,4029.53
+995,995,8/8/2015,pending,8/11/2014,50 Riverside Crossing,,,,Poland,925.36,credit card,4679.85
+996,996,2/2/2022,shipped,5/25/2013,4653 Fulton Court,,,,Dominican Republic,370.32,cash on delivery,286.05
+997,997,8/21/2022,processing,3/21/2010,97437 Thackeray Plaza,,,,China,599.57,cash on delivery,3543.71
+998,998,6/15/2013,processing,1/18/2013,982 Reindahl Court,,,,Ukraine,305.28,credit card,1664.08
+999,999,2/26/2010,delivered,6/3/2019,0588 Brown Alley,,,,Brazil,816.31,PayPal,1.31
+1000,1000,2/4/2011,pending,3/10/2016,22 Jackson Plaza,,,,Indonesia,795.93,PayPal,2553.11

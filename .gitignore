@@ -7,7 +7,6 @@ secrets.json
 
 # Data and Cache
 data/
-DataSets/
 DataSets.zip
 __pycache__/
 *.pyc
