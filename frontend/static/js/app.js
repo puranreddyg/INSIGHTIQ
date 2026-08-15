@@ -1069,6 +1069,7 @@ function xaiJumpToStep(idx) {
 }
 
 function initXaiPlayer(result) {
+  xaiPause();
   const trace = result?.knowledge?.reasoning_trace || [];
   const timeline = document.getElementById("xai-timeline");
   if (!timeline) return;
