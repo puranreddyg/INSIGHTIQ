@@ -233,9 +233,23 @@ def purchase_orders(limit: int = 50):
 # Static frontend
 # ---------------------------------------------------------------------------
 
-app.mount("/static", StaticFiles(directory=str(config.FRONTEND_DIR / "static")), name="static")
+class RevalidatingStaticFiles(StaticFiles):
+    """Static files that browsers must revalidate on every load (cheap 304 via ETag).
+
+    Without a Cache-Control header, browsers cache app.js/styles.css heuristically
+    for days, so after a deploy users keep running the OLD frontend against the NEW
+    API (blank KPI cards, empty charts) until they hard-refresh.
+    """
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/static", RevalidatingStaticFiles(directory=str(config.FRONTEND_DIR / "static")), name="static")
 
 
 @app.get("/")
 def index():
-    return FileResponse(str(config.FRONTEND_DIR / "index.html"))
+    return FileResponse(str(config.FRONTEND_DIR / "index.html"), headers={"Cache-Control": "no-cache"})
