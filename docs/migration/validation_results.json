@@ -1,0 +1,501 @@
+{
+  "run_at": "2026-09-27T17:23:47",
+  "raw_checksums": [
+    {
+      "check": "raw unchanged: Procurement KPI Analysis Dataset.csv",
+      "passed": true,
+      "detail": "bf9a529c52cd7de2"
+    },
+    {
+      "check": "raw unchanged: archive (1)/clander.csv",
+      "passed": true,
+      "detail": "085b9af1967e7598"
+    },
+    {
+      "check": "raw unchanged: archive (1)/customer.csv",
+      "passed": true,
+      "detail": "99ccca120ca9cbcd"
+    },
+    {
+      "check": "raw unchanged: archive (1)/order.csv",
+      "passed": true,
+      "detail": "1a166b6b9daa4b31"
+    },
+    {
+      "check": "raw unchanged: archive (1)/product.csv",
+      "passed": true,
+      "detail": "58f04efce65d724d"
+    },
+    {
+      "check": "raw unchanged: supply_chain_dataset1.csv",
+      "passed": true,
+      "detail": "76dad280541a60f1"
+    },
+    {
+      "check": "raw CSVs identical to git HEAD",
+      "passed": true,
+      "detail": "git diff --quiet HEAD -- raw CSVs"
+    }
+  ],
+  "row_counts": [
+    {
+      "source": "DataSets/archive (1)/product.csv",
+      "table": "products",
+      "source_rows": 1000,
+      "db_rows": 1000,
+      "difference": 0
+    },
+    {
+      "source": "DataSets/archive (1)/order.csv",
+      "table": "orders",
+      "source_rows": 1000,
+      "db_rows": 1000,
+      "difference": 0
+    },
+    {
+      "source": "DataSets/archive (1)/customer.csv",
+      "table": "customers",
+      "source_rows": 1000,
+      "db_rows": 1000,
+      "difference": 0
+    },
+    {
+      "source": "DataSets/archive (1)/clander.csv",
+      "table": "calendar",
+      "source_rows": 1000,
+      "db_rows": 935,
+      "difference": 65
+    },
+    {
+      "source": "DataSets/Procurement KPI Analysis Dataset.csv",
+      "table": "procurement_kpi",
+      "source_rows": 777,
+      "db_rows": 777,
+      "difference": 0
+    },
+    {
+      "source": "DataSets/supply_chain_dataset1.csv",
+      "table": "supply_chain",
+      "source_rows": 91250,
+      "db_rows": 91250,
+      "difference": 0
+    },
+    {
+      "source": "DataSets/simulated/supplier_sku_profile.csv",
+      "table": "supplier_sku_profile",
+      "source_rows": 211,
+      "db_rows": 211,
+      "difference": 0
+    },
+    {
+      "source": "supply_chain (distinct SKU \u00d7 warehouse)",
+      "table": "sku_supplier_lanes",
+      "source_rows": 250,
+      "db_rows": 250,
+      "difference": 0
+    }
+  ],
+  "calendar_filter": {
+    "raw_rows": 1000,
+    "unparseable_dates_removed": 0,
+    "duplicate_dates_removed": 65,
+    "db_rows": 935
+  },
+  "integrity": [
+    {
+      "check": "profile pairs invented (not in source)",
+      "passed": true,
+      "detail": 0
+    },
+    {
+      "check": "source pairs missing from profile",
+      "passed": true,
+      "detail": 0
+    },
+    {
+      "check": "profile pairs == lane pairs",
+      "passed": true,
+      "detail": 211
+    },
+    {
+      "check": "profile duplicate (sku, supplier)",
+      "passed": true,
+      "detail": 0
+    },
+    {
+      "check": "lanes duplicate (sku, warehouse)",
+      "passed": true,
+      "detail": 0
+    },
+    {
+      "check": "profile nulls",
+      "passed": true,
+      "detail": 0
+    },
+    {
+      "check": "lanes nulls",
+      "passed": true,
+      "detail": 0
+    },
+    {
+      "check": "available_qty within historical range 200-499",
+      "passed": true,
+      "detail": [
+        200,
+        499
+      ]
+    },
+    {
+      "check": "defect_rate within [0, real max]",
+      "passed": true,
+      "detail": [
+        0.0118,
+        0.1442,
+        0.144299
+      ]
+    },
+    {
+      "check": "fulfillment_rate within [0, 1]",
+      "passed": true,
+      "detail": [
+        0.7518,
+        0.8686
+      ]
+    },
+    {
+      "check": "quality fields constant per supplier",
+      "passed": true,
+      "detail": "10 suppliers"
+    },
+    {
+      "check": "SQLite integrity_check",
+      "passed": true,
+      "detail": "ok"
+    },
+    {
+      "check": "schema user_version",
+      "passed": true,
+      "detail": 2
+    }
+  ],
+  "simulation": {
+    "available_qty_vs_history": {
+      "generated_mean": 351.66,
+      "generated_sd": 86.39,
+      "history_mean": 349.83,
+      "history_sd": 86.19,
+      "every_value_is_a_real_order_size_of_its_pair": true
+    },
+    "eligibility_mix_by_request_size": {
+      "276": {
+        "pairs_eligible_pct": 76.3,
+        "skus_with_none": 0,
+        "skus_with_all": 17
+      },
+      "351": {
+        "pairs_eligible_pct": 48.8,
+        "skus_with_none": 4,
+        "skus_with_all": 3
+      },
+      "425": {
+        "pairs_eligible_pct": 27.0,
+        "skus_with_none": 13,
+        "skus_with_all": 1
+      },
+      "468": {
+        "pairs_eligible_pct": 10.4,
+        "skus_with_none": 30,
+        "skus_with_all": 0
+      }
+    },
+    "evidence": {
+      "order_qty_pairs_differ_kruskal_p": 0.8672,
+      "order_qty_decile_counts_200_500": [
+        486,
+        510,
+        492,
+        533,
+        469,
+        513,
+        492,
+        540,
+        502,
+        490
+      ],
+      "defect_rate_by_supplier_kruskal_p": 2.4896939137439074e-118,
+      "fulfillment_by_supplier_chi2": 0.985,
+      "fulfillment_by_supplier_chi2_p": 0.912,
+      "inventory_is_buyer_stock_flow_match_pct": 100.0
+    },
+    "high_risk_suppliers": [
+      "SUP_2",
+      "SUP_3",
+      "SUP_5",
+      "SUP_7",
+      "SUP_8",
+      "SUP_10"
+    ],
+    "reliable_suppliers_fulfillment_ge_090": []
+  },
+  "end_to_end": {
+    "urgent_skus": [
+      {
+        "sku_id": "SKU_44",
+        "urgent_warehouses": "WH_2, WH_3",
+        "required_quantity": 790,
+        "candidates": 5,
+        "eligible": 0,
+        "excluded": "SUP_9, SUP_5, SUP_2, SUP_7, SUP_1",
+        "recommended": null,
+        "recommended_status": null,
+        "backup": null,
+        "plan_status": "no_eligible_supplier",
+        "combined_available": 1384
+      },
+      {
+        "sku_id": "SKU_19",
+        "urgent_warehouses": "WH_3, WH_4",
+        "required_quantity": 720,
+        "candidates": 4,
+        "eligible": 0,
+        "excluded": "SUP_7, SUP_10, SUP_8, SUP_1",
+        "recommended": null,
+        "recommended_status": null,
+        "backup": null,
+        "plan_status": "no_eligible_supplier",
+        "combined_available": 1231
+      },
+      {
+        "sku_id": "SKU_37",
+        "urgent_warehouses": "WH_1, WH_5",
+        "required_quantity": 610,
+        "candidates": 4,
+        "eligible": 0,
+        "excluded": "SUP_4, SUP_10, SUP_7, SUP_8",
+        "recommended": null,
+        "recommended_status": null,
+        "backup": null,
+        "plan_status": "no_eligible_supplier",
+        "combined_available": 1348
+      },
+      {
+        "sku_id": "SKU_2",
+        "urgent_warehouses": "WH_3",
+        "required_quantity": 410,
+        "candidates": 5,
+        "eligible": 1,
+        "excluded": "SUP_5, SUP_2, SUP_10, SUP_7",
+        "recommended": "SUP_9",
+        "recommended_status": "Standard",
+        "backup": null,
+        "plan_status": "planned",
+        "combined_available": 1884
+      },
+      {
+        "sku_id": "SKU_47",
+        "urgent_warehouses": "WH_4",
+        "required_quantity": 390,
+        "candidates": 4,
+        "eligible": 0,
+        "excluded": "SUP_1, SUP_5, SUP_10, SUP_7",
+        "recommended": null,
+        "recommended_status": null,
+        "backup": null,
+        "plan_status": "no_eligible_supplier",
+        "combined_available": 1417
+      },
+      {
+        "sku_id": "SKU_42",
+        "urgent_warehouses": "WH_1",
+        "required_quantity": 390,
+        "candidates": 5,
+        "eligible": 1,
+        "excluded": "SUP_7, SUP_2, SUP_3, SUP_5",
+        "recommended": "SUP_4",
+        "recommended_status": "Standard",
+        "backup": null,
+        "plan_status": "planned",
+        "combined_available": 1735
+      },
+      {
+        "sku_id": "SKU_41",
+        "urgent_warehouses": "WH_1",
+        "required_quantity": 370,
+        "candidates": 3,
+        "eligible": 2,
+        "excluded": "SUP_3",
+        "recommended": "SUP_6",
+        "recommended_status": "Standard",
+        "backup": "SUP_1",
+        "plan_status": "planned",
+        "combined_available": 1180
+      },
+      {
+        "sku_id": "SKU_39",
+        "urgent_warehouses": "WH_1",
+        "required_quantity": 370,
+        "candidates": 4,
+        "eligible": 1,
+        "excluded": "SUP_6, SUP_4, SUP_10",
+        "recommended": "SUP_3",
+        "recommended_status": "High Risk",
+        "backup": null,
+        "plan_status": "planned",
+        "combined_available": 1250
+      },
+      {
+        "sku_id": "SKU_50",
+        "urgent_warehouses": "WH_5",
+        "required_quantity": 360,
+        "candidates": 4,
+        "eligible": 1,
+        "excluded": "SUP_10, SUP_8, SUP_2",
+        "recommended": "SUP_4",
+        "recommended_status": "Standard",
+        "backup": null,
+        "plan_status": "planned",
+        "combined_available": 1270
+      },
+      {
+        "sku_id": "SKU_21",
+        "urgent_warehouses": "WH_3",
+        "required_quantity": 340,
+        "candidates": 3,
+        "eligible": 1,
+        "excluded": "SUP_1, SUP_8",
+        "recommended": "SUP_2",
+        "recommended_status": "High Risk",
+        "backup": null,
+        "plan_status": "planned",
+        "combined_available": 977
+      },
+      {
+        "sku_id": "SKU_5",
+        "urgent_warehouses": "WH_4",
+        "required_quantity": 300,
+        "candidates": 3,
+        "eligible": 2,
+        "excluded": "SUP_1",
+        "recommended": "SUP_7",
+        "recommended_status": "High Risk",
+        "backup": "SUP_8",
+        "plan_status": "planned",
+        "combined_available": 1110
+      }
+    ],
+    "distinct_recommended_suppliers": [
+      "SUP_2",
+      "SUP_3",
+      "SUP_4",
+      "SUP_6",
+      "SUP_7",
+      "SUP_9"
+    ],
+    "top_heuristic_supplier_count_across_50_skus": {
+      "SUP_1": 5,
+      "SUP_2": 5,
+      "SUP_3": 4,
+      "SUP_4": 4,
+      "SUP_5": 10,
+      "SUP_6": 3,
+      "SUP_7": 7,
+      "SUP_8": 1,
+      "SUP_9": 7,
+      "SUP_10": 4
+    },
+    "distinct_full_rankings_across_50_skus": 50,
+    "skus_whose_top_supplier_changes_with_delivery_heavy_weights": 17,
+    "non_urgent_sku_SKU_3_plan_status": "no_action"
+  },
+  "future_compatibility": [
+    {
+      "check": "time-series columns for demand ML retained",
+      "passed": true,
+      "detail": [
+        "date",
+        "demand_forecast",
+        "inventory_level",
+        "order_quantity",
+        "promotion_flag",
+        "region",
+        "reorder_point",
+        "sku_id",
+        "stockout_flag",
+        "units_sold",
+        "warehouse_id"
+      ]
+    },
+    {
+      "check": "365 daily observations per SKU-warehouse retained",
+      "passed": true,
+      "detail": 365
+    },
+    {
+      "check": "raw criteria on every candidate",
+      "passed": true,
+      "detail": [
+        "available_qty",
+        "defect_rate",
+        "fulfillment_rate",
+        "heuristic_score",
+        "lane_count",
+        "lead_time_days",
+        "lead_time_max",
+        "lead_time_min",
+        "rank",
+        "raw_score",
+        "scoring",
+        "sku_id",
+        "supplier_id",
+        "unit_cost",
+        "unit_cost_max",
+        "unit_cost_min",
+        "warehouses"
+      ]
+    },
+    {
+      "check": "per-supplier availability retained (split orders)",
+      "passed": true,
+      "detail": 211
+    }
+  ],
+  "reproducibility": [
+    {
+      "check": "two in-memory generations identical",
+      "passed": true,
+      "detail": "seed 20260926"
+    },
+    {
+      "check": "file deleted then regenerated byte-identical",
+      "passed": true,
+      "detail": {
+        "before": "3ef2933fa9488cc1",
+        "after": "3ef2933fa9488cc1"
+      }
+    },
+    {
+      "check": "regenerated output hash matches metadata",
+      "passed": true,
+      "detail": "3ef2933fa9488cc1"
+    }
+  ],
+  "old_behaviour": {
+    "urgent_products_run": 53,
+    "recommended_counts": {
+      "SUP_1": 53
+    },
+    "backup_counts": {
+      "SUP_9": 53
+    }
+  },
+  "pytest": {
+    "exit_code": 0,
+    "summary": "82 passed in 12.91s",
+    "tests_per_file": {
+      "test_simulation.py": 14,
+      "test_sku_pipeline.py": 33,
+      "test_supplier_agent.py": 35
+    }
+  },
+  "all_checks_passed": true
+}

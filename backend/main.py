@@ -12,8 +12,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from backend import config
-from backend.agents import coordinator_agent, supplier_agent
-from backend.database import build_database, connect
+from backend.agents import coordinator_agent, perception_agent, supplier_agent
+from backend.database import TABLES_TO_BUILD, build_database, connect
 
 APP_STARTED_AT = datetime.now()
 
@@ -37,7 +37,7 @@ def _startup() -> None:
 # ---------------------------------------------------------------------------
 
 class ApproveOrderRequest(BaseModel):
-    product_id: int
+    sku_id: str
     supplier_id: str
     supplier_name: Optional[str] = None
     quantity: int
@@ -50,12 +50,22 @@ class ApproveOrderRequest(BaseModel):
 # System / dashboard endpoints
 # ---------------------------------------------------------------------------
 
+PRODUCT_ID_RETIRED = (
+    "Procurement is SKU-based: product.csv has no link to any supplier or SKU, so product_id "
+    "can no longer trigger procurement. Use sku_id (SKU_1..SKU_50)."
+)
+
+
+def _require_sku(conn, sku_id: str) -> None:
+    if conn.execute("SELECT 1 FROM sku_supplier_lanes WHERE sku_id = ? LIMIT 1", (sku_id,)).fetchone() is None:
+        raise HTTPException(status_code=404, detail=f"SKU {sku_id} not found")
+
+
 @app.get("/api/system-health")
 def system_health():
     with connect() as conn:
-        tables = ["products", "orders", "customers", "calendar", "procurement_kpi", "supply_chain", "supplier_profiles", "purchase_orders"]
-        counts = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in tables}
-        urgent_count = conn.execute("SELECT COUNT(*) FROM products WHERE urgent = 1").fetchone()[0]
+        counts = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in TABLES_TO_BUILD + ["purchase_orders"]}
+        urgent_count = len(perception_agent.urgent_requests(perception_agent.observe_all(conn)))
     uptime_seconds = (datetime.now() - APP_STARTED_AT).total_seconds()
     return {
         "status": "online",
@@ -71,65 +81,71 @@ def system_health():
     }
 
 
+def _sku_summary(r: dict, candidate_counts: dict[str, int]) -> dict:
+    return {
+        "sku_id": r["sku_id"],
+        "urgent": r["Urgent"],
+        "urgent_warehouses": [lane["warehouse_id"] for lane in r["lanes"] if lane["Urgent"]],
+        "lane_count": r["lane_count"],
+        "inventory": r["Inventory"],
+        "reorder_point": r["ReorderPoint"],
+        "shortfall": r["Shortfall"],
+        "required_quantity": r["RequiredQuantity"],
+        "candidate_suppliers": candidate_counts.get(r["sku_id"], 0),
+    }
+
+
+def _candidate_counts(conn) -> dict[str, int]:
+    rows = conn.execute("SELECT sku_id, COUNT(DISTINCT supplier_id) FROM sku_supplier_lanes GROUP BY sku_id").fetchall()
+    return {sku: n for sku, n in rows}
+
+
 @app.get("/api/dashboard")
 def dashboard():
     with connect() as conn:
-        products = pd.read_sql_query("SELECT * FROM products", conn)
-        orders = pd.read_sql_query("SELECT * FROM orders", conn)
-        supplier_profiles = pd.read_sql_query("SELECT * FROM supplier_profiles", conn)
+        requests = perception_agent.observe_all(conn)
+        counts = _candidate_counts(conn)
         active_pos = pd.read_sql_query("SELECT * FROM purchase_orders ORDER BY created_at DESC", conn)
+        avg_lead = conn.execute("SELECT AVG(lead_time_days) FROM sku_supplier_lanes").fetchone()[0]
+        avg_fulfillment = conn.execute(
+            "SELECT AVG(fulfillment_rate) FROM (SELECT DISTINCT supplier_id, fulfillment_rate FROM supplier_sku_profile)"
+        ).fetchone()[0]
+        as_of = perception_agent.snapshot_date(conn)[:10]
 
-        urgent = products[products["urgent"] == 1].sort_values("deficit", ascending=False)
-
-        kpis = {
-            "critical_low_stock_skus": int(len(urgent)),
-            "active_purchase_orders": int((active_pos["status"] == "Approved").sum()) if not active_pos.empty else 0,
-            "avg_procurement_lead_time_days": round(float(orders["lead_time_days"].mean()), 1) if not orders.empty else 0,
-            "avg_supplier_reliability": round(float(supplier_profiles["reliability_score"].mean()) * 100, 1) if not supplier_profiles.empty else 0,
-        }
-
-        alert_table = [
-            {
-                "product_id": int(r.product_id),
-                "sku": f"SKU-{int(r.product_id):04d}",
-                "product_name": r.product_name,
-                "category": r.category,
-                "inventory": int(r.units_in_stock),
-                "reorder_level": int(r.reorder_level),
-                "deficit": int(r.deficit),
-                "unit_price": float(r.unit_price),
-            }
-            for r in urgent.head(50).itertuples()
-        ]
-
-        recent_orders = active_pos.head(10).to_dict(orient="records") if not active_pos.empty else []
-
+    urgent = perception_agent.urgent_requests(requests)
+    kpis = {
+        "critical_low_stock_skus": len(urgent),
+        "active_purchase_orders": int((active_pos["status"] == "Approved").sum()) if not active_pos.empty else 0,
+        "avg_supplier_lead_time_days": round(float(avg_lead), 1) if avg_lead is not None else None,
+        "avg_supplier_fulfillment_rate": round(float(avg_fulfillment) * 100, 1) if avg_fulfillment is not None else None,
+    }
     return {
+        "snapshot_date": as_of,
         "kpis": kpis,
-        "alerts": alert_table,
-        "recent_purchase_orders": recent_orders,
+        "kpi_provenance": {"avg_supplier_lead_time_days": "REAL", "avg_supplier_fulfillment_rate": "SIMULATED"},
+        "alerts": [_sku_summary(r, counts) for r in urgent],
+        "recent_purchase_orders": active_pos.head(10).to_dict(orient="records") if not active_pos.empty else [],
         "generated_at": datetime.now().isoformat(),
     }
 
 
-@app.get("/api/products")
-def list_products(
-    q: Optional[str] = None,
-    urgent_only: bool = False,
-    limit: int = Query(50, le=500),
-):
+@app.get("/api/skus")
+def list_skus(q: Optional[str] = None, urgent_only: bool = False):
     with connect() as conn:
-        sql = "SELECT product_id, product_name, category, units_in_stock, reorder_level, deficit, urgent, unit_price FROM products WHERE 1=1"
-        params: list = []
-        if urgent_only:
-            sql += " AND urgent = 1"
-        if q:
-            sql += " AND (product_name LIKE ? OR category LIKE ?)"
-            params += [f"%{q}%", f"%{q}%"]
-        sql += " ORDER BY deficit DESC LIMIT ?"
-        params.append(limit)
-        rows = conn.execute(sql, params).fetchall()
-    return {"products": [dict(r) for r in rows]}
+        requests = perception_agent.observe_all(conn)
+        counts = _candidate_counts(conn)
+        as_of = perception_agent.snapshot_date(conn)[:10]
+    rows = [_sku_summary(r, counts) for r in requests.values()]
+    if urgent_only:
+        rows = [r for r in rows if r["urgent"]]
+    if q:
+        rows = [r for r in rows if q.lower() in r["sku_id"].lower()]
+    return {"snapshot_date": as_of, "skus": rows}
+
+
+@app.get("/api/products")
+def list_products():
+    raise HTTPException(status_code=410, detail=PRODUCT_ID_RETIRED)
 
 
 # ---------------------------------------------------------------------------
@@ -137,13 +153,14 @@ def list_products(
 # ---------------------------------------------------------------------------
 
 @app.post("/api/run-agent-pipeline")
-def run_agent_pipeline(product_id: int = Query(...)):
+def run_agent_pipeline(sku_id: Optional[str] = None, product_id: Optional[int] = None):
+    if sku_id is None:
+        if product_id is not None:
+            raise HTTPException(status_code=410, detail=PRODUCT_ID_RETIRED)
+        raise HTTPException(status_code=422, detail="sku_id is required")
     with connect() as conn:
-        product = conn.execute("SELECT product_id FROM products WHERE product_id = ?", (product_id,)).fetchone()
-        if product is None:
-            raise HTTPException(status_code=404, detail=f"Product {product_id} not found")
-        result = coordinator_agent.run_pipeline(conn, product_id=product_id)
-    return result
+        _require_sku(conn, sku_id)
+        return coordinator_agent.run_pipeline(conn, sku_id=sku_id)
 
 
 # ---------------------------------------------------------------------------
@@ -151,13 +168,14 @@ def run_agent_pipeline(product_id: int = Query(...)):
 # ---------------------------------------------------------------------------
 
 @app.get("/api/suppliers")
-def suppliers(required_deficit: float = 0):
+def suppliers(sku_id: str, required_quantity: Optional[float] = Query(None, ge=0)):
+    """Candidate matrix for one SKU. Without required_quantity, the SKU's
+    current requirement from the Perception Agent is used."""
     with connect() as conn:
-        if required_deficit and required_deficit > 0:
-            result = supplier_agent.rank_suppliers(conn, required_deficit=required_deficit)
-        else:
-            result = supplier_agent.full_matrix(conn)
-    return result
+        _require_sku(conn, sku_id)
+        if required_quantity is None:
+            required_quantity = perception_agent.observe_sku(conn, sku_id)["RequiredQuantity"]
+        return supplier_agent.rank_suppliers(conn, sku_id, required_quantity=required_quantity, top_n=None)
 
 
 # ---------------------------------------------------------------------------
@@ -166,21 +184,31 @@ def suppliers(required_deficit: float = 0):
 
 @app.post("/api/approve-order")
 def approve_order(payload: ApproveOrderRequest):
+    if payload.quantity <= 0:
+        raise HTTPException(status_code=422, detail="quantity must be positive")
     total_cost = round(payload.quantity * payload.unit_cost, 2)
     with connect() as conn:
-        product = conn.execute(
-            "SELECT product_name FROM products WHERE product_id = ?", (payload.product_id,)
+        _require_sku(conn, payload.sku_id)
+        profile = conn.execute(
+            "SELECT available_qty FROM supplier_sku_profile WHERE sku_id = ? AND supplier_id = ?",
+            (payload.sku_id, payload.supplier_id),
         ).fetchone()
-        if product is None:
-            raise HTTPException(status_code=404, detail=f"Product {payload.product_id} not found")
+        if profile is None:
+            raise HTTPException(status_code=422, detail=f"{payload.supplier_id} does not supply {payload.sku_id}")
+        if payload.quantity > profile["available_qty"]:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{payload.supplier_id} has {profile['available_qty']} units of {payload.sku_id} available; "
+                       f"{payload.quantity} requested",
+            )
 
         cur = conn.execute(
             """INSERT INTO purchase_orders
-               (product_id, product_name, supplier_id, supplier_name, quantity, unit_cost,
+               (sku_id, product_name, supplier_id, supplier_name, quantity, unit_cost,
                 total_cost, order_date, estimated_arrival, backup_supplier_id, status)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                payload.product_id, product["product_name"], payload.supplier_id,
+                payload.sku_id, payload.sku_id, payload.supplier_id,
                 payload.supplier_name or payload.supplier_id, payload.quantity, payload.unit_cost,
                 total_cost, datetime.now().date().isoformat(), payload.estimated_arrival,
                 payload.backup_supplier_id, "Approved",

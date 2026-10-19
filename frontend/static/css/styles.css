@@ -299,6 +299,8 @@ html.dark .theme-toggle .icon-sun { opacity: 1; transform: rotate(0deg) scale(1)
 .badge-standard { background: var(--info-soft); color: var(--info); }
 .badge-reliable { background: #c3f2e4; color: #0a5f56; }
 html.dark .badge-reliable { background: #0f2e28; color: #4fd1c5; }
+.badge-ineligible { background: var(--surface-2); color: var(--text-muted); text-decoration: line-through; }
+.badge-sim { display:inline-flex; align-items:center; margin-left:0.3rem; padding:0 0.35rem; border-radius:4px; font-size:0.6rem; font-weight:700; letter-spacing:.05em; vertical-align:middle; background: var(--warning-soft); color: var(--warning); cursor: help; }
 .badge-idle { background: var(--surface-2); color: var(--text-muted); }
 .badge-active { background: var(--warning-soft); color: var(--warning); }
 .badge-completed { background: var(--success-soft); color: var(--success); }

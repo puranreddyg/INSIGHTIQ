@@ -18,7 +18,7 @@ from backend.agents import knowledge_agent, perception_agent, planning_agent, su
 PIPELINE_STAGES = ["Perception Agent", "Supplier Intelligence Agent", "Knowledge Agent", "Planning Agent"]
 
 
-def run_pipeline(conn: sqlite3.Connection, product_id: Optional[int] = None) -> dict:
+def run_pipeline(conn: sqlite3.Connection, sku_id: Optional[str] = None) -> dict:
     started_at = datetime.now().isoformat()
     stage_log: list[dict] = []
 
@@ -31,18 +31,21 @@ def run_pipeline(conn: sqlite3.Connection, product_id: Optional[int] = None) -> 
         })
 
     t0 = time.perf_counter()
-    perception_result = perception_agent.run(conn, product_id=product_id)
+    perception_result = perception_agent.run(conn, sku_id=sku_id)
     _log("Perception Agent", "completed", t0, {
-        "summary": f"Scanned inventory ledger — {perception_result['urgent_sku_count']} urgent SKU(s) detected.",
+        "summary": f"Scanned supply-chain ledger ({perception_result['snapshot_date']}) — "
+                   f"{perception_result['urgent_sku_count']} urgent SKU(s) detected.",
     })
 
     focus = perception_result["focus_facts"][0] if perception_result["focus_facts"] else None
-    deficit = focus["Deficit"] if focus else 0
+    required = focus["RequiredQuantity"] if focus else 0
+    focus_sku = focus["sku_id"] if focus else sku_id
 
     t1 = time.perf_counter()
-    supplier_result = supplier_agent.run(conn, required_deficit=deficit)
+    supplier_result = supplier_agent.run(conn, sku_id=focus_sku, required_quantity=required)
     _log("Supplier Intelligence Agent", "completed", t1, {
-        "summary": f"Ranked {supplier_result['eligible_count']}/{supplier_result['pool_size']} eligible suppliers via heuristic search.",
+        "summary": f"{supplier_result['eligible_count']}/{supplier_result['pool_size']} candidate suppliers can supply "
+                   f"{required} units; ranked via heuristic search.",
     })
 
     t2 = time.perf_counter()
@@ -53,7 +56,7 @@ def run_pipeline(conn: sqlite3.Connection, product_id: Optional[int] = None) -> 
     })
 
     t3 = time.perf_counter()
-    planning_result = planning_agent.run(conn, focus, knowledge_result, deficit)
+    planning_result = planning_agent.run(conn, focus, knowledge_result, required, supplier_result)
     _log("Planning Agent", "completed", t3, {
         "summary": (
             f"Plan ready — {planning_result.get('order_quantity', 0)} units, "
@@ -63,7 +66,7 @@ def run_pipeline(conn: sqlite3.Connection, product_id: Optional[int] = None) -> 
 
     return {
         "agent": "AI Coordinator Agent",
-        "product_id": product_id,
+        "sku_id": focus_sku,
         "started_at": started_at,
         "completed_at": datetime.now().isoformat(),
         "pipeline_stages": PIPELINE_STAGES,

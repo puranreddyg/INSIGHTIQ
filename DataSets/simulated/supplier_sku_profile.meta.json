@@ -1,0 +1,157 @@
+{
+  "table": "supplier_sku_profile",
+  "seed": 20260926,
+  "random_streams": "numpy.random.SeedSequence(seed).spawn(3) -> [available_qty, defect_rate, fulfillment_rate]",
+  "row_order": "sku number ascending, then supplier number ascending",
+  "rows": 211,
+  "granularity": {
+    "available_qty": "SKU-supplier",
+    "defect_rate": "supplier (same value on every SKU row of a supplier)",
+    "fulfillment_rate": "supplier (same value on every SKU row of a supplier)"
+  },
+  "relationships": {
+    "valid_pairs_in_source": 211,
+    "skus": 50,
+    "suppliers": 10,
+    "suppliers_per_sku": {
+      "3": 7,
+      "4": 25,
+      "5": 18
+    }
+  },
+  "available_qty": {
+    "status": "SIMULATED",
+    "source": "supply_chain_dataset1.csv Order_Quantity where Order_Quantity > 0",
+    "method": "one value drawn uniformly at random (with replacement) from the pair's own historical Order_Quantity values",
+    "historical_orders_total": 5027,
+    "min_observations_required": 10,
+    "observations_per_pair": {
+      "n": 211,
+      "min": 18.0,
+      "max": 62.0,
+      "mean": 23.824645,
+      "median": 20.0,
+      "std": 8.676326,
+      "p5": 18.0,
+      "p10": 19.0,
+      "p25": 19.0,
+      "p50": 20.0,
+      "p75": 22.0,
+      "p90": 40.0,
+      "p95": 40.5
+    },
+    "order_quantity_all_pairs": {
+      "n": 5027,
+      "min": 200.0,
+      "max": 499.0,
+      "mean": 349.833897,
+      "median": 351.0,
+      "std": 86.192751,
+      "p5": 215.0,
+      "p10": 231.0,
+      "p25": 276.0,
+      "p50": 351.0,
+      "p75": 425.0,
+      "p90": 468.0,
+      "p95": 484.0
+    },
+    "generated": {
+      "n": 211,
+      "min": 200.0,
+      "max": 499.0,
+      "mean": 351.663507,
+      "median": 348.0,
+      "std": 86.393428,
+      "p5": 218.0,
+      "p10": 237.0,
+      "p25": 278.5,
+      "p50": 348.0,
+      "p75": 426.0,
+      "p90": 470.0,
+      "p95": 487.0
+    }
+  },
+  "defect_rate": {
+    "status": "SIMULATED",
+    "source": "Procurement KPI Analysis Dataset.csv: Defective_Units / Quantity; POs with blank Defective_Units excluded",
+    "usable_pos": 641,
+    "excluded_pos_blank_defective_units": 136,
+    "per_po_defect_rate": {
+      "n": 641,
+      "min": 0.0,
+      "max": 0.357143,
+      "mean": 0.070063,
+      "median": 0.051515,
+      "std": 0.050069,
+      "p5": 0.016736,
+      "p10": 0.020288,
+      "p25": 0.027835,
+      "p50": 0.051515,
+      "p75": 0.105169,
+      "p90": 0.149867,
+      "p95": 0.157623
+    },
+    "real_supplier_rates_weighted": {
+      "Alpha_Inc": 0.022483,
+      "Beta_Supplies": 0.093546,
+      "Delta_Logistics": 0.144299,
+      "Epsilon_Group": 0.02966,
+      "Gamma_Co": 0.049579
+    },
+    "distribution": "Beta(alpha, beta) fitted by method of moments to the 5 real supplier-level weighted rates",
+    "alpha": 1.592709,
+    "beta": 21.859376,
+    "fit_mean": 0.067913,
+    "fit_sd": 0.05088,
+    "cap_exact_real_max": 0.1442986,
+    "cap_applied": 0.1442,
+    "cap_rule": "min(value, floor(real max supplier rate to 4 dp))",
+    "values_before_cap": {
+      "SUP_1": 0.0118,
+      "SUP_2": 0.0833,
+      "SUP_3": 0.1634,
+      "SUP_4": 0.0194,
+      "SUP_5": 0.1333,
+      "SUP_6": 0.0365,
+      "SUP_7": 0.0513,
+      "SUP_8": 0.0596,
+      "SUP_9": 0.0448,
+      "SUP_10": 0.1365
+    },
+    "capped_suppliers": [
+      "SUP_3"
+    ]
+  },
+  "fulfillment_rate": {
+    "status": "SIMULATED",
+    "not_on_time_rate": "the KPI dataset has no promised/expected delivery date, so on-time performance cannot be computed",
+    "definition": "Delivered / (Delivered + Partially Delivered + Cancelled); Pending excluded",
+    "source": "Procurement KPI Analysis Dataset.csv Order_Status",
+    "real_pooled_rate": 0.804598,
+    "real_supplier_rates": {
+      "Alpha_Inc": 0.823077,
+      "Beta_Supplies": 0.80292,
+      "Delta_Logistics": 0.779221,
+      "Epsilon_Group": 0.810811,
+      "Gamma_Co": 0.811024
+    },
+    "finished_pos_per_real_supplier": {
+      "Alpha_Inc": 130,
+      "Beta_Supplies": 137,
+      "Delta_Logistics": 154,
+      "Epsilon_Group": 148,
+      "Gamma_Co": 127
+    },
+    "method": "Binomial(n, p) / n per simulated supplier",
+    "n": 137,
+    "p": 0.804598
+  },
+  "generated_at": "2026-09-27T17:08:02",
+  "generator": "backend/simulation/supplier_sku_profile.py",
+  "command": "python -m backend.simulation.supplier_sku_profile",
+  "inputs_sha256": {
+    "DataSets/supply_chain_dataset1.csv": "76dad280541a60f135442f3eeb3ef4804a28e48f6a9677f63ddba236ddc80491",
+    "DataSets/Procurement KPI Analysis Dataset.csv": "bf9a529c52cd7de254994a55d087f865d3aefc0ba66790e8ee43a26e7beb6e9c"
+  },
+  "output_sha256": "3ef2933fa9488cc1b544dea678eb8c7560dd142db30f80116fd68caacff866ab"
+}

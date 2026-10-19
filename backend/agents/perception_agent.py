@@ -1,109 +1,136 @@
 """
-Perception Agent — continuous environment observation (PEAS model).
+Perception Agent — observes SKU stock state in the real supply-chain ledger.
 
-Percepts:  product.csv (stock levels), order.csv (fulfillment/lead-time
-           signals), customer.csv (outbound demand signals)
-Actions:   emits structured state facts consumed by the downstream agents.
-Environment: enterprise inventory + order ledger (partially observable,
-             refreshed on each pipeline run).
-Sensors:   SQLite queries against the cleaned `products`, `orders`, and
-           `customers` tables built by backend/database.py.
+Percepts:  `supply_chain` (daily Inventory_Level, Reorder_Point, Units_Sold,
+           Order_Quantity per SKU × warehouse) as of the latest date in the data.
+Actions:   emits one procurement request per SKU for the downstream agents.
+
+Urgency is decided per warehouse lane (Inventory < ReorderPoint). The request is
+per SKU and keeps its lanes, so warehouse detail is carried, not aggregated away.
+
+required_quantity replicates the replenishment policy observed in the data: an
+order is placed only when a lane drops below its reorder point, and lot sizes do
+not depend on the shortfall. Each urgent lane therefore needs its median
+historical lot size; the SKU needs the sum, rounded up to ORDER_QUANTITY_ROUNDING.
 """
 from __future__ import annotations
 
+import math
+import re
 import sqlite3
 from typing import Optional
 
 import pandas as pd
 
-
-def _row_to_fact(row: sqlite3.Row) -> dict:
-    return {
-        "product_id": row["product_id"],
-        "product_name": row["product_name"],
-        "category": row["category"],
-        "supplier_id": row["supplier_id"],
-        "SKU": f"SKU-{row['product_id']:04d}",
-        "Inventory": row["units_in_stock"],
-        "ReorderPoint": row["reorder_level"],
-        "TargetStock": row["target_stock"],
-        "Deficit": row["deficit"],
-        "Urgent": bool(row["urgent"]),
-        "UnitPrice": row["unit_price"],
-    }
+from backend.config import DEMAND_LOOKBACK_DAYS, ORDER_QUANTITY_ROUNDING
 
 
-def observe_product(conn: sqlite3.Connection, product_id: int) -> Optional[dict]:
-    """Perceive the current inventory state of a single SKU."""
-    row = conn.execute(
-        "SELECT * FROM products WHERE product_id = ?", (product_id,)
-    ).fetchone()
-    if row is None:
-        return None
-    return _row_to_fact(row)
+def snapshot_date(conn: sqlite3.Connection) -> str:
+    return conn.execute("SELECT MAX(date) FROM supply_chain").fetchone()[0]
 
 
-def scan_environment(conn: sqlite3.Connection, limit: int = 500) -> list[dict]:
-    """Scan the full product ledger for urgent (below-reorder-point) SKUs."""
-    rows = conn.execute(
-        "SELECT * FROM products WHERE urgent = 1 ORDER BY deficit DESC LIMIT ?",
-        (limit,),
-    ).fetchall()
-    return [_row_to_fact(r) for r in rows]
-
-
-def demand_signals(conn: sqlite3.Connection, top_n: int = 8) -> dict:
-    """Aggregate outbound demand trend from customers joined with orders, and
-    an overall order-volume trend for seasonality context."""
+def _lane_table(conn: sqlite3.Connection, as_of: str) -> pd.DataFrame:
+    lanes = pd.read_sql_query(
+        """SELECT sku_id, warehouse_id, supplier_id, inventory_level, reorder_point
+           FROM supply_chain WHERE date = ?""",
+        conn, params=(as_of,),
+    )
     orders = pd.read_sql_query(
-        "SELECT customer_id, order_date, total_amount, lead_time_days FROM orders", conn,
-        parse_dates=["order_date"],
+        "SELECT sku_id, warehouse_id, order_quantity FROM supply_chain WHERE order_quantity > 0", conn
     )
-    customers = pd.read_sql_query("SELECT customer_id, country FROM customers", conn)
+    lot = orders.groupby(["sku_id", "warehouse_id"]).order_quantity.median().rename("lot_size_median").reset_index()
 
-    merged = orders.merge(customers, on="customer_id", how="left")
-    by_country = (
-        merged.groupby("country")["total_amount"].sum().sort_values(ascending=False).head(top_n)
-    )
-    top_buyers = (
-        merged.groupby("customer_id")["total_amount"].sum().sort_values(ascending=False).head(top_n)
-    )
-    monthly = merged.dropna(subset=["order_date"]).copy()
-    monthly["month"] = monthly["order_date"].dt.to_period("M").astype(str)
-    trend = monthly.groupby("month")["total_amount"].agg(["count", "sum"]).tail(12)
+    cutoff = (pd.Timestamp(as_of) - pd.Timedelta(days=DEMAND_LOOKBACK_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
+    demand = pd.read_sql_query(
+        "SELECT sku_id, warehouse_id, units_sold FROM supply_chain WHERE date > ? AND date <= ?",
+        conn, params=(cutoff, as_of),
+    ).groupby(["sku_id", "warehouse_id"]).units_sold.mean().rename("daily_demand").reset_index()
 
-    avg_lead_time = float(orders["lead_time_days"].mean())
+    lanes = lanes.merge(lot, on=["sku_id", "warehouse_id"], how="left").merge(demand, on=["sku_id", "warehouse_id"], how="left")
+    lanes["shortfall"] = (lanes.reorder_point - lanes.inventory_level).clip(lower=0)
+    lanes["urgent"] = lanes.inventory_level < lanes.reorder_point
+    return lanes
 
+
+def _round_up(value: float, base: int) -> int:
+    return int(math.ceil(value / base) * base)
+
+
+def _lane_fact(r) -> dict:
     return {
-        "demand_by_country": [
-            {"country": c, "total_amount": round(float(v), 2)} for c, v in by_country.items()
-        ],
-        "top_buyers": [
-            {"customer_id": int(c), "total_amount": round(float(v), 2)} for c, v in top_buyers.items()
-        ],
-        "monthly_order_trend": [
-            {"month": m, "order_count": int(r["count"]), "total_amount": round(float(r["sum"]), 2)}
-            for m, r in trend.iterrows()
-        ],
-        "avg_order_lead_time_days": round(avg_lead_time, 1) if pd.notna(avg_lead_time) else None,
+        "warehouse_id": r.warehouse_id,
+        "supplier_id": r.supplier_id,
+        "Inventory": int(r.inventory_level),
+        "ReorderPoint": int(r.reorder_point),
+        "Shortfall": int(r.shortfall),
+        "Urgent": bool(r.urgent),
+        "LotSizeMedian": float(r.lot_size_median) if pd.notna(r.lot_size_median) else None,
+        "DailyDemand": round(float(r.daily_demand), 2) if pd.notna(r.daily_demand) else None,
     }
 
 
-def run(conn: sqlite3.Connection, product_id: Optional[int] = None) -> dict:
-    """Entry point used by the Coordinator Agent."""
-    if product_id is not None:
-        fact = observe_product(conn, product_id)
-        facts = [fact] if fact else []
-    else:
-        facts = scan_environment(conn, limit=1)
+def _sku_request(sku_id: str, lanes: pd.DataFrame, as_of: str) -> dict:
+    lanes = lanes.sort_values("warehouse_id")
+    urgent = lanes[lanes.urgent]
+    # Urgent lanes drive the request. With none, the lane closest to its reorder
+    # point is shown so Rule 1 has a concrete fact to evaluate.
+    focus = urgent if not urgent.empty else lanes.assign(_m=lanes.inventory_level - lanes.reorder_point).nsmallest(1, "_m")
+    raw_need = float(urgent.lot_size_median.sum()) if not urgent.empty else 0.0
+    return {
+        "SKU": sku_id,
+        "sku_id": sku_id,
+        "snapshot_date": as_of[:10],
+        "Urgent": not urgent.empty,
+        "urgent_lane_count": int(len(urgent)),
+        "lane_count": int(len(lanes)),
+        "lanes": [_lane_fact(r) for r in lanes.itertuples()],
+        "focus_lanes": [_lane_fact(r) for r in focus.itertuples()],
+        "focus_scope": "urgent lanes" if not urgent.empty else "closest lane (none urgent)",
+        "Inventory": int(focus.inventory_level.sum()),
+        "ReorderPoint": int(focus.reorder_point.sum()),
+        "Shortfall": int(urgent.shortfall.sum()),
+        "DailyDemand": round(float(focus.daily_demand.sum()), 2),
+        "required_quantity_raw": raw_need,
+        "RequiredQuantity": _round_up(raw_need, ORDER_QUANTITY_ROUNDING) if raw_need else 0,
+        "required_quantity_rule": "sum over urgent lanes of the lane's median historical Order_Quantity, rounded up to the nearest "
+                                  f"{ORDER_QUANTITY_ROUNDING}",
+    }
 
-    urgent_scan = scan_environment(conn, limit=25)
-    signals = demand_signals(conn)
+
+def _natural_key(identifier: str) -> list:
+    """SKU_2 before SKU_10, without assuming any particular ID format."""
+    return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", identifier)]
+
+
+def observe_all(conn: sqlite3.Connection) -> dict[str, dict]:
+    as_of = snapshot_date(conn)
+    lanes = _lane_table(conn, as_of)
+    requests = {sku: _sku_request(sku, g, as_of) for sku, g in lanes.groupby("sku_id")}
+    return dict(sorted(requests.items(), key=lambda kv: _natural_key(kv[0])))
+
+
+def observe_sku(conn: sqlite3.Connection, sku_id: str) -> Optional[dict]:
+    return observe_all(conn).get(sku_id)
+
+
+def urgent_requests(requests: dict[str, dict]) -> list[dict]:
+    urgent = [r for r in requests.values() if r["Urgent"]]
+    return sorted(urgent, key=lambda r: (-r["RequiredQuantity"], -r["Shortfall"], r["sku_id"]))
+
+
+def run(conn: sqlite3.Connection, sku_id: Optional[str] = None) -> dict:
+    """Entry point used by the Coordinator Agent."""
+    requests = observe_all(conn)
+    urgent = urgent_requests(requests)
+    if sku_id is not None:
+        focus = requests.get(sku_id)
+    else:
+        focus = urgent[0] if urgent else None
 
     return {
         "agent": "Perception Agent",
-        "focus_facts": facts,
-        "urgent_skus": urgent_scan,
-        "urgent_sku_count": len(urgent_scan),
-        "demand_signals": signals,
+        "snapshot_date": snapshot_date(conn)[:10],
+        "focus_facts": [focus] if focus else [],
+        "urgent_skus": [{k: v for k, v in r.items() if k not in ("lanes", "focus_lanes")} for r in urgent],
+        "urgent_sku_count": len(urgent),
     }

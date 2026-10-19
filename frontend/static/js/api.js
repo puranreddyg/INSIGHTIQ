@@ -16,12 +16,16 @@ const Api = (() => {
   return {
     systemHealth: () => _req("/api/system-health"),
     dashboard: () => _req("/api/dashboard"),
-    products: (params = {}) => {
+    skus: (params = {}) => {
       const qs = new URLSearchParams(params).toString();
-      return _req(`/api/products?${qs}`);
+      return _req(`/api/skus?${qs}`);
     },
-    runPipeline: (productId) => _req(`/api/run-agent-pipeline?product_id=${productId}`, { method: "POST" }),
-    suppliers: (requiredDeficit = 0) => _req(`/api/suppliers?required_deficit=${requiredDeficit}`),
+    runPipeline: (skuId) => _req(`/api/run-agent-pipeline?sku_id=${encodeURIComponent(skuId)}`, { method: "POST" }),
+    suppliers: (skuId, requiredQuantity = null) => {
+      const qs = new URLSearchParams({ sku_id: skuId });
+      if (requiredQuantity !== null) qs.set("required_quantity", requiredQuantity);
+      return _req(`/api/suppliers?${qs}`);
+    },
     approveOrder: (payload) => _req("/api/approve-order", { method: "POST", body: JSON.stringify(payload) }),
     orders: () => _req("/api/orders"),
   };

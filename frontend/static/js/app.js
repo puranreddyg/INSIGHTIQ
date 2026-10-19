@@ -97,8 +97,8 @@ function staggerIn(container, selector) {
 const state = {
   view: "dashboard",
   dashboardData: null,
-  productsCache: [],
-  selectedProductId: null,
+  skusCache: [],
+  selectedSkuId: null,
   lastPipeline: null,
   lastSuppliers: null,
   approvedThisSession: null,
@@ -142,8 +142,31 @@ function statusBadgeClass(status) {
   const map = {
     "Preferred": "badge-preferred", "High Risk": "badge-risk",
     "Standard": "badge-standard", "Reliable": "badge-reliable",
+    "Ineligible": "badge-ineligible",
   };
   return map[status] || "badge-standard";
+}
+
+// Marks a value that comes from the simulated supplier-SKU profile, not observed data.
+function simBadge() {
+  return `<span class="badge-sim" title="Simulated — DataSets/simulated/README.md">SIM</span>`;
+}
+
+async function ensureSkus() {
+  if (!state.skusCache.length) {
+    try { state.skusCache = (await Api.skus()).skus; } catch (_) {}
+  }
+  return state.skusCache;
+}
+
+function defaultSkuId() {
+  return state.selectedSkuId ?? state.skusCache.find((s) => s.urgent)?.sku_id ?? state.skusCache[0]?.sku_id;
+}
+
+function skuOptionsHtml(selected) {
+  return state.skusCache.map((s) =>
+    `<option value="${esc(s.sku_id)}" ${s.sku_id === selected ? "selected" : ""}>${s.urgent ? "⚠ " : ""}${esc(s.sku_id)} · stock ${s.inventory}/${s.reorder_point}${s.urgent ? ` · need ${s.required_quantity}` : ""}</option>`
+  ).join("");
 }
 
 // ---------------------------------------------------------------------------
@@ -208,7 +231,7 @@ function switchView(view, opts = {}) {
   if (!opts.immediate) animateViewIn(panel);
 
   if (view === "dashboard") loadDashboard();
-  if (view === "pipeline") loadPipelineView(opts.productId);
+  if (view === "pipeline") loadPipelineView(opts.skuId);
   if (view === "suppliers") loadSuppliersView();
   if (view === "action") loadActionView();
 }
@@ -292,20 +315,20 @@ function renderDashboard(data) {
     <div class="fade-in space-y-6">
       <div>
         <h1 class="page-title">Executive Enterprise Dashboard</h1>
-        <p class="text-sm text-body mt-1">Live snapshot generated ${fmtDate(data.generated_at)} · ${new Date(data.generated_at).toLocaleTimeString()}</p>
+        <p class="text-sm text-body mt-1">Supply-chain snapshot as of ${fmtDate(data.snapshot_date)} · generated ${new Date(data.generated_at).toLocaleTimeString()}</p>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        ${kpiCard("Critical Low Stock SKUs", fmtNum(k.critical_low_stock_skus), "urgent", "SKUs below reorder point")}
+        ${kpiCard("Critical Low Stock SKUs", fmtNum(k.critical_low_stock_skus), "urgent", "SKUs with a warehouse below reorder point")}
         ${kpiCard("Active Purchase Orders", fmtNum(k.active_purchase_orders), "info", "Approved & in flight")}
-        ${kpiCard("Avg Procurement Lead Time", `${k.avg_procurement_lead_time_days ?? "—"}d`, "neutral", "Order → shipped, fleet avg")}
-        ${kpiCard("Supplier Reliability Avg", `${k.avg_supplier_reliability ?? "—"}%`, "good", "Across unified supplier pool")}
+        ${kpiCard("Avg Supplier Lead Time", `${k.avg_supplier_lead_time_days ?? "—"}d`, "neutral", "Across all SKU-warehouse lanes")}
+        ${kpiCard("Avg Supplier Fulfillment", `${k.avg_supplier_fulfillment_rate ?? "—"}%`, "good", "Simulated supplier-level rate")}
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div class="card hoverable p-5 lg:col-span-2">
-          <h2 class="font-semibold text-heading mb-1">Top SKUs by Stock Deficit</h2>
-          <p class="text-xs text-body mb-3">Units needed to reach target safety stock (3× reorder point)</p>
+          <h2 class="font-semibold text-heading mb-1">Top SKUs by Required Quantity</h2>
+          <p class="text-xs text-body mb-3">Sum of each urgent warehouse's median historical order size</p>
           <div class="h-72"><canvas id="chart-deficit"></canvas></div>
         </div>
         <div class="card hoverable p-5">
@@ -318,14 +341,14 @@ function renderDashboard(data) {
         <div class="flex items-center justify-between px-5 py-4 border-b border-soft">
           <div>
             <h2 class="font-semibold text-heading">Live Alert Table</h2>
-            <p class="text-xs text-body">SKUs where Inventory &lt; Reorder Point</p>
+            <p class="text-xs text-body">SKUs with at least one warehouse where Inventory &lt; Reorder Point</p>
           </div>
           <span class="badge badge-urgent badge-live">${data.alerts.length} active alerts</span>
         </div>
         <div class="overflow-x-auto">
           <table class="table-clean w-full">
             <thead><tr>
-              <th>SKU</th><th>Product</th><th>Category</th><th>Inventory</th><th>Reorder Lvl</th><th>Deficit</th><th>Unit Price</th><th></th>
+              <th>SKU</th><th>Urgent Warehouses</th><th>Inventory</th><th>Reorder Pt</th><th>Shortfall</th><th>Required Qty</th><th>Candidate Suppliers</th><th></th>
             </tr></thead>
             <tbody>${data.alerts.map(alertRow).join("")}</tbody>
           </table>
@@ -337,13 +360,13 @@ function renderDashboard(data) {
   document.getElementById("recent-po-list").innerHTML = data.recent_purchase_orders.length
     ? data.recent_purchase_orders.map((po) => `
         <div class="border border-soft rounded-lg p-3 text-sm">
-          <div class="flex justify-between font-medium text-heading"><span>${esc(po.product_name)}</span><span class="tabular">${fmtCurrency(po.total_cost)}</span></div>
+          <div class="flex justify-between font-medium text-heading"><span>${esc(po.sku_id || po.product_name)}</span><span class="tabular">${fmtCurrency(po.total_cost)}</span></div>
           <div class="text-xs text-body mt-1">${esc(po.supplier_name)} · ${po.quantity} units · ETA ${fmtDate(po.estimated_arrival)}</div>
         </div>`).join("")
     : `<div class="text-sm text-muted text-center py-8">No purchase orders approved yet.</div>`;
 
-  root.querySelectorAll("[data-trigger-product]").forEach((btn) =>
-    btn.addEventListener("click", () => switchView("pipeline", { productId: Number(btn.dataset.triggerProduct) }))
+  root.querySelectorAll("[data-trigger-sku]").forEach((btn) =>
+    btn.addEventListener("click", () => switchView("pipeline", { skuId: btn.dataset.triggerSku }))
   );
 
   renderDeficitChart(data.alerts);
@@ -376,14 +399,14 @@ function kpiCard(label, value, tone, sub) {
 function alertRow(a) {
   return `
     <tr>
-      <td class="font-mono text-xs text-body">${esc(a.sku)}</td>
-      <td class="font-medium text-heading">${esc(a.product_name)}</td>
-      <td class="text-body">${esc(a.category)}</td>
+      <td class="font-mono text-xs font-semibold text-heading">${esc(a.sku_id)}</td>
+      <td class="text-body">${esc(a.urgent_warehouses.join(", "))}</td>
       <td class="tabular">${fmtNum(a.inventory)}</td>
-      <td class="tabular">${fmtNum(a.reorder_level)}</td>
-      <td><span class="badge badge-urgent tabular">${fmtNum(a.deficit)}</span></td>
-      <td class="tabular">${fmtCurrency(a.unit_price)}</td>
-      <td><button data-trigger-product="${a.product_id}" class="btn-primary !py-1.5 !px-3 text-xs">Trigger AI Procurement</button></td>
+      <td class="tabular">${fmtNum(a.reorder_point)}</td>
+      <td class="tabular">${fmtNum(a.shortfall)}</td>
+      <td><span class="badge badge-urgent tabular">${fmtNum(a.required_quantity)}</span></td>
+      <td class="tabular">${fmtNum(a.candidate_suppliers)}</td>
+      <td><button data-trigger-sku="${esc(a.sku_id)}" class="btn-primary !py-1.5 !px-3 text-xs">Trigger AI Procurement</button></td>
     </tr>`;
 }
 
@@ -395,10 +418,10 @@ function renderDeficitChart(alerts) {
   charts.deficit = new Chart(ctx, {
     type: "bar",
     data: {
-      labels: top.map((a) => a.sku),
+      labels: top.map((a) => a.sku_id),
       datasets: [{
-        label: "Deficit (units)",
-        data: top.map((a) => a.deficit),
+        label: "Required quantity (units)",
+        data: top.map((a) => a.required_quantity),
         backgroundColor: barGradient(pal.series1, true),
         hoverBackgroundColor: pal.series1,
         borderRadius: 4,
@@ -416,7 +439,7 @@ function renderDeficitChart(alerts) {
           callbacks: {
             label: (ctx) => {
               const a = top[ctx.dataIndex];
-              return `${a.product_name}: ${a.deficit} units short`;
+              return `${a.required_quantity} units needed (${a.urgent_warehouses.join(", ")} below reorder point)`;
             },
           },
         },
@@ -433,13 +456,11 @@ function renderDeficitChart(alerts) {
 // VIEW 2 — Interactive Multi-Agent Pipeline & XAI Inspector
 // ===========================================================================
 
-async function loadPipelineView(prefillProductId) {
+async function loadPipelineView(prefillSkuId) {
   const root = document.getElementById("view-pipeline");
-  if (!state.productsCache.length) {
-    try { state.productsCache = (await Api.products({ limit: 500 })).products; } catch (_) {}
-  }
-  const pid = prefillProductId ?? state.selectedProductId ?? (state.productsCache.find((p) => p.urgent)?.product_id);
-  state.selectedProductId = pid;
+  await ensureSkus();
+  const sid = prefillSkuId ?? defaultSkuId();
+  state.selectedSkuId = sid;
 
   root.innerHTML = `
     <div class="fade-in space-y-6">
@@ -449,7 +470,7 @@ async function loadPipelineView(prefillProductId) {
           <p class="text-sm text-body mt-1">Perception → Supplier Intelligence → Knowledge → Planning</p>
         </div>
         <div class="flex items-center gap-2">
-          <select id="product-select" class="input-field min-w-[260px]"></select>
+          <select id="sku-select" class="input-field min-w-[260px]"></select>
           <button id="run-pipeline-btn" class="btn-primary">Run Agent Pipeline</button>
         </div>
       </div>
@@ -460,22 +481,20 @@ async function loadPipelineView(prefillProductId) {
     </div>
   `;
 
-  const select = document.getElementById("product-select");
-  select.innerHTML = state.productsCache.map((p) =>
-    `<option value="${p.product_id}" ${p.product_id === pid ? "selected" : ""}>${p.urgent ? "⚠ " : ""}SKU-${String(p.product_id).padStart(4, "0")} · ${esc(p.product_name)} (stock ${p.units_in_stock}/${p.reorder_level})</option>`
-  ).join("");
+  const select = document.getElementById("sku-select");
+  select.innerHTML = skuOptionsHtml(sid);
 
   const stages = ["Perception Agent", "Supplier Intelligence Agent", "Knowledge Agent", "Planning Agent"];
-  document.getElementById("run-pipeline-btn").addEventListener("click", () => runPipeline(Number(select.value)));
+  document.getElementById("run-pipeline-btn").addEventListener("click", () => runPipeline(select.value));
 
   // Only auto-run when the user explicitly asked for it (clicked "Trigger AI
-  // Procurement" on the dashboard, which passes prefillProductId). Simply
+  // Procurement" on the dashboard, which passes prefillSkuId). Simply
   // opening this tab from the nav bar must never fire a procurement run on
   // its own — it should sit idle until "Run Agent Pipeline" is clicked.
-  if (prefillProductId) {
+  if (prefillSkuId) {
     renderAgentFlow(stages, {});
-    runPipeline(prefillProductId);
-  } else if (state.lastPipeline && state.lastPipeline.product_id === pid) {
+    runPipeline(prefillSkuId);
+  } else if (state.lastPipeline && state.lastPipeline.sku_id === sid) {
     const completed = Object.fromEntries(stages.map((s) => [s, "completed"]));
     renderAgentFlow(stages, completed);
     stages.forEach((s, i) => {
@@ -519,9 +538,9 @@ function renderAgentFlow(stages, statusMap) {
   }).join("");
 }
 
-async function runPipeline(productId) {
-  if (!productId) return;
-  state.selectedProductId = productId;
+async function runPipeline(skuId) {
+  if (!skuId) return;
+  state.selectedSkuId = skuId;
   const btn = document.getElementById("run-pipeline-btn");
   btn.disabled = true;
   btn.textContent = "Running…";
@@ -531,7 +550,7 @@ async function runPipeline(productId) {
   renderAgentStrip(stages.map((n) => ({ name: n, status: "idle" })), null);
 
   try {
-    const result = await Api.runPipeline(productId);
+    const result = await Api.runPipeline(skuId);
     state.lastPipeline = result;
 
     // Replay stage completion sequentially for a legible pipeline animation —
@@ -563,6 +582,8 @@ function renderPipelineResult(result) {
   const focus = result.focus_fact;
   const plan = result.planning;
   const rec = result.knowledge.recommended_supplier;
+  const sup = result.supplier;
+  const urgentWh = focus ? focus.lanes.filter((l) => l.Urgent).map((l) => l.warehouse_id) : [];
 
   container.innerHTML = `
     <div class="fade-in grid grid-cols-1 lg:grid-cols-2 gap-5 mt-2">
@@ -570,12 +591,12 @@ function renderPipelineResult(result) {
         <h2 class="font-semibold text-heading mb-3">Perceived State — ${focus ? esc(focus.SKU) : "N/A"}</h2>
         ${focus ? `
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <div><div class="text-xs text-muted">Product</div><div class="font-medium text-heading">${esc(focus.product_name)}</div></div>
-            <div><div class="text-xs text-muted">Inventory</div><div class="font-medium text-heading tabular">${fmtNum(focus.Inventory)}</div></div>
+            <div><div class="text-xs text-muted">Snapshot Date</div><div class="font-medium text-heading">${fmtDate(focus.snapshot_date)}</div></div>
+            <div><div class="text-xs text-muted">Urgent Warehouses</div><div class="font-medium text-heading">${urgentWh.length ? esc(urgentWh.join(", ")) : `none of ${focus.lane_count}`}</div></div>
+            <div><div class="text-xs text-muted">Inventory (${esc(focus.focus_scope)})</div><div class="font-medium text-heading tabular">${fmtNum(focus.Inventory)}</div></div>
             <div><div class="text-xs text-muted">Reorder Point</div><div class="font-medium text-heading tabular">${fmtNum(focus.ReorderPoint)}</div></div>
-            <div><div class="text-xs text-muted">Deficit</div><div class="font-medium text-danger tabular">${fmtNum(focus.Deficit)}</div></div>
+            <div><div class="text-xs text-muted">Required Quantity</div><div class="font-medium text-danger tabular">${fmtNum(focus.RequiredQuantity)}</div></div>
             <div><div class="text-xs text-muted">Status</div><div>${focus.Urgent ? '<span class="badge badge-urgent badge-live">Urgent Procurement</span>' : '<span class="badge badge-standard">Monitoring</span>'}</div></div>
-            <div><div class="text-xs text-muted">Unit Price</div><div class="font-medium text-heading tabular">${fmtCurrency(focus.UnitPrice)}</div></div>
           </div>` : `<p class="text-sm text-muted">No focus SKU.</p>`}
 
         <h3 class="font-semibold text-heading mt-5 mb-2 text-sm">Recommended Supplier</h3>
@@ -583,10 +604,16 @@ function renderPipelineResult(result) {
           <div class="border border-soft rounded-lg p-3 text-sm flex items-center justify-between">
             <div>
               <div class="font-medium text-heading">${esc(rec.supplier_id)}</div>
-              <div class="text-xs text-body">${esc(rec.region)} · Score ${rec.heuristic_score?.toFixed?.(1) ?? rec.heuristic_score}</div>
+              <div class="text-xs text-body">${fmtCurrency(rec.unit_cost)}/unit · ${rec.lead_time_days}d lead · ${fmtNum(rec.available_qty)} available${simBadge()} · Score ${rec.heuristic_score?.toFixed?.(1) ?? rec.heuristic_score}</div>
             </div>
             <span class="badge ${statusBadgeClass(rec.supplier_status)}">${esc(rec.supplier_status)}</span>
+          </div>` : sup.no_eligible_supplier ? `
+          <div class="border border-soft rounded-lg p-3 text-sm">
+            <div class="font-medium text-danger">No supplier selected</div>
+            <div class="text-xs text-body mt-1">None of the ${sup.pool_size} candidates can supply ${fmtNum(sup.required_quantity)} units alone (combined availability ${fmtNum(sup.combined_available_qty)}${simBadge()}). ${sup.split_order_possible ? "A split order across suppliers could cover it — not implemented yet." : "Even a split order could not cover it."}</div>
           </div>` : `<p class="text-sm text-muted">No eligible supplier.</p>`}
+
+        ${plan && plan.error ? `<p class="text-sm text-body mt-4">${esc(plan.error)}</p>` : ""}
 
         ${plan && !plan.error ? `
         <h3 class="font-semibold text-heading mt-5 mb-2 text-sm">Plan Snapshot</h3>
@@ -833,10 +860,12 @@ function xaiDecisionCardHtml(block, stepsRef) {
 
 function xaiBuildReasonText(supplierBlock, finalStatus, highRisk) {
   const parts = [];
+  const r5 = supplierBlock.rules.find((r) => r.ruleId === 5);
+  if (r5) parts.push(r5.matched ? "Available quantity covers the required quantity." : "Available quantity is below the required quantity.");
   const r3 = supplierBlock.rules.find((r) => r.ruleId === 3);
   if (r3) parts.push(r3.matched ? "Defect rate exceeded the high-risk threshold." : "Defect rate did not exceed the high-risk threshold.");
-  if (finalStatus === "Preferred") parts.push("Rating and delivery time both cleared the Preferred bar.");
-  else if (finalStatus === "Reliable") parts.push("Reliability cleared the required threshold with no prior status.");
+  if (finalStatus === "Preferred") parts.push("Lead time and defect rate both cleared the Preferred bar.");
+  else if (finalStatus === "Reliable") parts.push("Fulfillment rate cleared the required threshold with no prior status.");
   else if (finalStatus === "Standard" && !highRisk) parts.push("The supplier did not satisfy the Preferred or Reliable conditions.");
   return parts.join(" ");
 }
@@ -1150,7 +1179,10 @@ async function loadSuppliersView() {
       <div class="card p-5"><div class="skeleton h-64 w-full"></div></div>
     </div>`;
   try {
-    const data = await Api.suppliers(0);
+    await ensureSkus();
+    const sid = defaultSkuId();
+    const data = await Api.suppliers(sid);
+    state.selectedSkuId = sid;
     state.lastSuppliers = data;
     renderSuppliersView(data);
   } catch (e) {
@@ -1161,29 +1193,34 @@ async function loadSuppliersView() {
 function renderSuppliersView(data) {
   const root = document.getElementById("view-suppliers");
   const rows = data.ranked_candidates;
+  const w = data.weights;
+  const pct = (k) => `${(w[k] * 100).toFixed(2).replace(/\.?0+$/, "")}`;
 
   root.innerHTML = `
     <div class="fade-in space-y-6">
       <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 class="page-title">Heuristic Supplier Decision Matrix</h1>
-          <p class="text-sm text-body mt-1">H = 0.30·Rating + 0.25·Cost + 0.25·Reliability + 0.20·Delivery — each component Min-Max normalized across the eligible pool (0 = worst, 1 = best)</p>
+          <h1 class="page-title">Heuristic Supplier Decision Matrix — ${esc(data.sku_id)}</h1>
+          <p class="text-sm text-body mt-1">H = ${pct("quality")}%·Quality + ${pct("cost")}%·Cost + ${pct("fulfillment")}%·Fulfillment + ${pct("delivery")}%·Delivery — Cost and Delivery are Min-Max normalized across eligible suppliers; Quality (1 − defect rate) and Fulfillment are used as absolute rates</p>
+          <p class="text-xs text-muted mt-1">Only suppliers that actually supply this SKU in the supply-chain data are candidates. ${simBadge()} = simulated field (supplier availability and quality are not in the source data).</p>
         </div>
-        <div class="flex items-center gap-2">
-          <label class="text-xs text-body">Filter by required deficit</label>
-          <input id="deficit-filter" type="number" min="0" placeholder="e.g. 500" class="input-field w-32" />
-          <button id="apply-deficit" class="btn-secondary">Apply</button>
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="matrix-sku" class="input-field min-w-[220px]">${skuOptionsHtml(data.sku_id)}</select>
+          <label class="text-xs text-body" for="required-filter">Required qty</label>
+          <input id="required-filter" type="number" min="0" value="${data.required_quantity}" class="input-field w-28" />
+          <button id="apply-required" class="btn-secondary">Apply</button>
         </div>
       </div>
 
+      ${rows.length ? `
       <div class="card p-5">
-        <h2 class="font-semibold text-heading mb-3">Heuristic Score by Supplier</h2>
+        <h2 class="font-semibold text-heading mb-3">Heuristic Score by Eligible Supplier</h2>
         <div class="h-64"><canvas id="chart-heuristic"></canvas></div>
       </div>
 
       <div class="card p-5">
         <h2 class="font-semibold text-heading mb-1">Score Composition — the four weighted heuristic components</h2>
-        <p class="text-xs text-body mb-3">Rating 30% · Cost 25% · Reliability 25% · Delivery 20%. Click any row in the table below to see how a supplier's Raw Score was assembled.</p>
+        <p class="text-xs text-body mb-3">Click any row in the table below to see how a supplier's Raw Score was assembled.</p>
         <div class="h-72"><canvas id="chart-breakdown"></canvas></div>
       </div>
 
@@ -1191,25 +1228,55 @@ function renderSuppliersView(data) {
         <div class="overflow-x-auto">
           <table class="table-clean w-full">
             <thead><tr>
-              <th>Rank</th><th>Supplier</th><th>Region</th><th>Cost/Unit</th><th>Rating</th><th>Delivery (d)</th>
-              <th>Reliability</th><th>Defect Rate</th><th>Stock Avail.</th><th>Heuristic Score</th>
+              <th>Rank</th><th>Supplier</th><th>Unit Cost</th><th>Lead Time (d)</th>
+              <th>Available${simBadge()}</th><th>Defect Rate${simBadge()}</th><th>Fulfillment${simBadge()}</th><th>Heuristic Score</th>
             </tr></thead>
             <tbody>${rows.map(supplierRow).join("")}</tbody>
           </table>
         </div>
-      </div>
+      </div>` : `
+      <div class="card p-6 text-sm">
+        <div class="font-semibold text-danger">No eligible supplier for ${fmtNum(data.required_quantity)} units</div>
+        <p class="text-body mt-1">Combined availability across all ${data.pool_size} candidates is ${fmtNum(data.combined_available_qty)} units${simBadge()}. No supplier is ranked or recommended.</p>
+      </div>`}
+
+      ${data.ineligible_suppliers.length ? `
+      <div class="card p-0 overflow-hidden">
+        <div class="px-5 py-4 border-b border-soft">
+          <h2 class="font-semibold text-heading">Excluded — cannot supply ${fmtNum(data.required_quantity)} units</h2>
+          <p class="text-xs text-body">Not scored: Rule 5 (AvailableQty ≥ RequiredQty) failed.</p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="table-clean w-full">
+            <thead><tr><th>Supplier</th><th>Available${simBadge()}</th><th>Shortfall</th><th>Unit Cost</th><th>Lead Time (d)</th><th>Warehouses</th></tr></thead>
+            <tbody>${data.ineligible_suppliers.map((s) => `
+              <tr>
+                <td class="font-medium text-heading">${esc(s.supplier_id)}</td>
+                <td class="tabular">${fmtNum(s.available_qty)}</td>
+                <td class="tabular text-danger">${fmtNum(s.shortfall)}</td>
+                <td class="tabular">${fmtCurrency(s.unit_cost)}</td>
+                <td class="tabular">${s.lead_time_days}</td>
+                <td class="text-body">${esc(s.warehouses)}</td>
+              </tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </div>` : ""}
     </div>
   `;
 
-  document.getElementById("apply-deficit").addEventListener("click", async () => {
-    const val = Number(document.getElementById("deficit-filter").value) || 0;
+  const reload = async (sku, qty) => {
     try {
-      const data = await Api.suppliers(val);
-      state.lastSuppliers = data;
-      renderSuppliersView(data);
-      toast(`Re-ranked against a ${val}-unit deficit — ${data.eligible_count}/${data.pool_size} eligible.`, "info");
-    } catch (e) { toast("Failed to re-rank suppliers.", "error"); }
-  });
+      const next = await Api.suppliers(sku, qty);
+      state.selectedSkuId = sku;
+      state.lastSuppliers = next;
+      renderSuppliersView(next);
+      toast(`${sku}: ${next.eligible_count}/${next.pool_size} suppliers can supply ${next.required_quantity} units.`, "info");
+    } catch (e) { toast("Failed to re-rank suppliers: " + e.message, "error"); }
+  };
+  document.getElementById("apply-required").addEventListener("click", () =>
+    reload(document.getElementById("matrix-sku").value, Math.max(0, Number(document.getElementById("required-filter").value) || 0))
+  );
+  document.getElementById("matrix-sku").addEventListener("change", (e) => reload(e.target.value, null));
 
   root.querySelectorAll("[data-supplier-toggle]").forEach((tr) =>
     tr.addEventListener("click", () => {
@@ -1222,8 +1289,12 @@ function renderSuppliersView(data) {
     })
   );
 
-  renderHeuristicChart(rows);
-  renderBreakdownChart(rows.slice(0, 5));
+  destroyChart("heuristic");
+  destroyChart("breakdown");
+  if (rows.length) {
+    renderHeuristicChart(rows);
+    renderBreakdownChart(rows.slice(0, 5));
+  }
   staggerIn(root, ".card");
 }
 
@@ -1231,9 +1302,9 @@ function renderSuppliersView(data) {
 // come from the backend's scoring.weights so the UI can't drift from the
 // formula the Supplier Intelligence Agent actually applied.
 const SCORE_COMPONENTS = [
-  ["rating", "Rating"],
+  ["quality", "Quality"],
   ["cost", "Cost"],
-  ["reliability", "Reliability"],
+  ["fulfillment", "Fulfillment"],
   ["delivery", "Delivery"],
 ];
 
@@ -1275,15 +1346,13 @@ function supplierRow(s) {
       <td class="font-semibold text-heading">#${s.rank}</td>
       <td>
         <div class="font-medium text-heading">${esc(s.supplier_id)}</div>
-        <div class="text-xs text-muted">vs ${esc(s.benchmarked_against)}</div>
+        <div class="text-xs text-muted">${esc(s.warehouses)}</div>
       </td>
-      <td class="text-body">${esc(s.region)}</td>
-      <td class="tabular">${fmtCurrency(s.avg_cost)}</td>
-      <td class="tabular">${s.rating ?? "—"} / 5</td>
-      <td class="tabular">${s.delivery_time_days}</td>
-      <td class="tabular">${(s.reliability_score * 100).toFixed(0)}%</td>
-      <td class="tabular">${s.defect_rate != null ? (s.defect_rate * 100).toFixed(1) + "%" : "—"}</td>
-      <td class="tabular">${fmtNum(Math.round(s.stock_availability))}</td>
+      <td class="tabular" title="${s.lane_count > 1 ? `mean of ${s.lane_count} warehouse lanes: ${fmtCurrency(s.unit_cost_min)}–${fmtCurrency(s.unit_cost_max)}` : "single warehouse lane"}">${fmtCurrency(s.unit_cost)}${s.lane_count > 1 ? " *" : ""}</td>
+      <td class="tabular">${s.lead_time_days}</td>
+      <td class="tabular">${fmtNum(s.available_qty)}</td>
+      <td class="tabular">${(s.defect_rate * 100).toFixed(2)}%</td>
+      <td class="tabular">${(s.fulfillment_rate * 100).toFixed(1)}%</td>
       <td>
         <div class="flex items-center gap-2">
           <div class="w-20 h-1.5 surface-2 rounded-full overflow-hidden"><div class="h-full" style="width:${pct}%; background:var(--accent)"></div></div>
@@ -1293,7 +1362,7 @@ function supplierRow(s) {
       </td>
     </tr>
     <tr class="supplier-detail-row" data-supplier-detail="${esc(s.supplier_id)}" hidden>
-      <td colspan="10">${scoreBreakdownHtml(s)}</td>
+      <td colspan="8">${scoreBreakdownHtml(s)}</td>
     </tr>`;
 }
 
@@ -1333,9 +1402,9 @@ function renderBreakdownChart(top5) {
       datasets: [
         // The four terms of the Raw Score, in weight order. Values and weights
         // both come from the backend's scoring object — nothing recomputed here.
-        { key: "rating", label: `Rating (${pctWeight(top5, "rating")})`, color: pal.series2 },
+        { key: "quality", label: `Quality (${pctWeight(top5, "quality")})`, color: pal.series2 },
         { key: "cost", label: `Cost (${pctWeight(top5, "cost")})`, color: pal.series1 },
-        { key: "reliability", label: `Reliability (${pctWeight(top5, "reliability")})`, color: pal.series4 },
+        { key: "fulfillment", label: `Fulfillment (${pctWeight(top5, "fulfillment")})`, color: pal.series4 },
         { key: "delivery", label: `Delivery (${pctWeight(top5, "delivery")})`, color: pal.series3 },
       ].map((d) => ({
         label: d.label,
@@ -1354,7 +1423,7 @@ function renderBreakdownChart(top5) {
           callbacks: {
             label: (ctx) => {
               const s = top5[ctx.dataIndex];
-              const key = ["rating", "cost", "reliability", "delivery"][ctx.datasetIndex];
+              const key = ["quality", "cost", "fulfillment", "delivery"][ctx.datasetIndex];
               if (!s?.scoring) return `${ctx.dataset.label}: —`;
               const score = s.scoring.components[key];
               const weight = s.scoring.weights[key];
@@ -1406,14 +1475,14 @@ async function loadActionView() {
     <div class="fade-in space-y-6">
       <div>
         <h1 class="page-title">Procurement Action &amp; Approval Hub</h1>
-        <p class="text-sm text-body mt-1">Review the generated plan for ${esc(focus.SKU)} — ${esc(focus.product_name)} and execute.</p>
+        <p class="text-sm text-body mt-1">Review the generated plan for ${esc(focus.SKU)} and execute.</p>
       </div>
 
       <div class="card p-6">
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
           <div>
             <div class="text-xs text-muted uppercase tracking-wide">Complete Action Plan</div>
-            <div class="text-lg font-bold text-heading">${esc(focus.product_name)} (${esc(focus.SKU)})</div>
+            <div class="text-lg font-bold text-heading">${esc(focus.SKU)} → ${esc(plan.primary_supplier_id)}</div>
           </div>
           <span class="badge ${statusBadgeClass(rec?.supplier_status)}">${esc(rec?.supplier_status || "N/A")}</span>
         </div>
@@ -1452,7 +1521,7 @@ async function loadActionView() {
     e.target.textContent = "Processing…";
     try {
       const payload = {
-        product_id: focus.product_id,
+        sku_id: focus.sku_id,
         supplier_id: plan.primary_supplier_id,
         supplier_name: rec?.supplier_id || plan.primary_supplier_id,
         quantity: plan.order_quantity,
@@ -1528,12 +1597,12 @@ function renderOrderHistory(history) {
       </div>
       <div class="overflow-x-auto">
         <table class="table-clean w-full">
-          <thead><tr><th>PO #</th><th>Product</th><th>Supplier</th><th>Qty</th><th>Total Cost</th><th>ETA</th><th>Status</th></tr></thead>
+          <thead><tr><th>PO #</th><th>SKU</th><th>Supplier</th><th>Qty</th><th>Total Cost</th><th>ETA</th><th>Status</th></tr></thead>
           <tbody>
             ${history.length ? history.map((po) => `
               <tr>
                 <td class="tabular">#${po.id}</td>
-                <td class="font-medium text-heading">${esc(po.product_name)}</td>
+                <td class="font-medium text-heading">${esc(po.sku_id || po.product_name)}</td>
                 <td class="text-body">${esc(po.supplier_name)}</td>
                 <td class="tabular">${fmtNum(po.quantity)}</td>
                 <td class="tabular">${fmtCurrency(po.total_cost)}</td>

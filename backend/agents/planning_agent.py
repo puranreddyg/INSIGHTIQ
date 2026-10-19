@@ -4,20 +4,17 @@ Planning Agent — operational strategy & contingency generation.
 Cross-references the cleaned `calendar` table (working days / weekend
 detection, seasonality) to project a realistic arrival date, computes order
 economics, a replenishment curve, and designates a backup supplier.
+
+The order quantity is the Perception Agent's required_quantity, already rounded
+and already checked against the primary supplier's availability. No plan is
+produced when nothing is needed or when no single supplier qualifies.
 """
 from __future__ import annotations
 
-import math
 import sqlite3
 from datetime import date, datetime, timedelta
 
 import pandas as pd
-
-from backend.config import DEFAULT_DAILY_DEMAND_FALLBACK, ORDER_QUANTITY_ROUNDING
-
-
-def _round_up(value: float, base: int) -> int:
-    return int(math.ceil(value / base) * base)
 
 
 def _add_working_days(start: date, working_days: int) -> date:
@@ -45,35 +42,47 @@ def _seasonality_delay_map(conn: sqlite3.Connection) -> dict[str, int]:
     return delay.to_dict()
 
 
-def _daily_demand_estimate(product_fact: dict) -> int:
-    reorder_point = product_fact.get("ReorderPoint") if product_fact else None
-    if not reorder_point:
-        return DEFAULT_DAILY_DEMAND_FALLBACK
-    # Heuristic: reorder point is sized to cover ~2 weeks of expected demand.
-    return max(1, round(reorder_point / 14))
-
-
 def build_plan(
     conn: sqlite3.Connection,
-    product_fact: dict | None,
+    sku_fact: dict | None,
     primary_supplier: dict | None,
     backup_supplier: dict | None,
-    deficit: float,
+    required_quantity: float,
+    supplier_result: dict | None = None,
 ) -> dict:
     trace: list[str] = []
     today = datetime.now().date()
 
-    if primary_supplier is None:
+    if not required_quantity:
         return {
             "agent": "Planning Agent",
-            "error": "No eligible supplier available to plan against.",
-            "reasoning": ["No candidate supplier passed the Supplier Intelligence Agent's filters."],
+            "status": "no_action",
+            "error": "No procurement required — no warehouse lane is below its reorder point.",
+            "reasoning": ["Rule 1 did not fire for any lane of this SKU, so no purchase order is planned."],
         }
 
-    order_quantity = _round_up(max(deficit, ORDER_QUANTITY_ROUNDING), ORDER_QUANTITY_ROUNDING)
-    trace.append(f"Order quantity set to {order_quantity} units (deficit {deficit:.0f}, rounded up to nearest {ORDER_QUANTITY_ROUNDING}).")
+    if primary_supplier is None:
+        combined = (supplier_result or {}).get("combined_available_qty", 0)
+        return {
+            "agent": "Planning Agent",
+            "status": "no_eligible_supplier",
+            "error": f"No single supplier can fulfil {required_quantity:.0f} units — no supplier was selected.",
+            "combined_available_qty": combined,
+            "reasoning": [
+                f"Every candidate's available quantity is below the required {required_quantity:.0f} units.",
+                f"Combined availability across candidates is {combined} units; "
+                + ("a split order across suppliers could cover it (not implemented)." if combined >= required_quantity
+                   else "even a split order could not cover it."),
+            ],
+        }
 
-    base_lead_days = max(1, round(primary_supplier.get("delivery_time_days", 5)))
+    order_quantity = int(required_quantity)
+    trace.append(
+        f"Order quantity {order_quantity} units = {sku_fact.get('required_quantity_rule', 'required quantity')} "
+        f"(primary supplier has {primary_supplier.get('available_qty')} available)."
+    )
+
+    base_lead_days = max(1, round(primary_supplier.get("lead_time_days", 5)))
     naive_arrival = _add_working_days(today, base_lead_days)
     trace.append(f"Base supplier lead time: {base_lead_days} working days → naive arrival {naive_arrival.isoformat()}.")
 
@@ -87,7 +96,7 @@ def build_plan(
     else:
         trace.append(f"Calendar seasonality adjustment: arrival falls in {season} (no additional delay).")
 
-    unit_cost = primary_supplier.get("avg_cost", 0)
+    unit_cost = primary_supplier.get("unit_cost", 0)
     total_expense = round(order_quantity * unit_cost, 2)
     trace.append(f"Total expense: {order_quantity} × ₹{unit_cost:.2f} = ₹{total_expense:,.2f} (primary supplier {primary_supplier['supplier_id']}).")
 
@@ -96,8 +105,9 @@ def build_plan(
     else:
         trace.append("No backup supplier available in the current candidate pool.")
 
-    daily_demand = _daily_demand_estimate(product_fact)
-    current_inventory = product_fact.get("Inventory", 0) if product_fact else 0
+    daily_demand = max(1, round(sku_fact.get("DailyDemand") or 0))
+    trace.append(f"Daily demand {daily_demand} units = mean real Units_Sold over the last 28 days of the {sku_fact.get('focus_scope', 'lanes')}.")
+    current_inventory = sku_fact.get("Inventory", 0)
     horizon_days = max((final_arrival - today).days + 7, 7)
 
     curve = []
@@ -111,6 +121,8 @@ def build_plan(
 
     return {
         "agent": "Planning Agent",
+        "status": "planned",
+        "sku_id": sku_fact["sku_id"],
         "order_quantity": order_quantity,
         "primary_supplier_id": primary_supplier["supplier_id"],
         "backup_supplier_id": backup_supplier["supplier_id"] if backup_supplier else None,
@@ -127,7 +139,8 @@ def build_plan(
     }
 
 
-def run(conn: sqlite3.Connection, product_fact: dict | None, knowledge_result: dict, deficit: float) -> dict:
+def run(conn: sqlite3.Connection, sku_fact: dict | None, knowledge_result: dict, required_quantity: float,
+        supplier_result: dict | None = None) -> dict:
     primary = knowledge_result.get("recommended_supplier")
     candidates = knowledge_result.get("annotated_candidates", [])
     alternatives = [c for c in candidates if primary and c["supplier_id"] != primary["supplier_id"]]
@@ -139,4 +152,4 @@ def run(conn: sqlite3.Connection, product_fact: dict | None, knowledge_result: d
         (c for c in alternatives if c.get("supplier_status") != "High Risk"),
         next(iter(alternatives), None),
     )
-    return build_plan(conn, product_fact, primary, backup, deficit)
+    return build_plan(conn, sku_fact, primary, backup, required_quantity, supplier_result)
