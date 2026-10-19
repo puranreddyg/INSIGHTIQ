@@ -43,16 +43,27 @@ def run_pipeline(conn: sqlite3.Connection, sku_id: Optional[str] = None) -> dict
 
     t1 = time.perf_counter()
     supplier_result = supplier_agent.run(conn, sku_id=focus_sku, required_quantity=required)
-    _log("Supplier Intelligence Agent", "completed", t1, {
-        "summary": f"{supplier_result['eligible_count']}/{supplier_result['pool_size']} candidate suppliers can supply "
-                   f"{required} units; ranked via heuristic search.",
-    })
+    if supplier_result.get("split_order_possible"):
+        supplier_summary = (
+            f"No single supplier can supply {required} units; combined stock of "
+            f"{supplier_result['combined_available_qty']} can — ranked {len(supplier_result['split_candidates'])} "
+            f"suppliers for a split order."
+        )
+    else:
+        supplier_summary = (
+            f"{supplier_result['eligible_count']}/{supplier_result['pool_size']} candidate suppliers can supply "
+            f"{required} units; ranked via heuristic search."
+        )
+    _log("Supplier Intelligence Agent", "completed", t1, {"summary": supplier_summary})
 
     t2 = time.perf_counter()
     knowledge_result = knowledge_agent.run(perception_result, supplier_result)
     _log("Knowledge Agent", "completed", t2, {
-        "summary": f"Forward-chained {len(knowledge_result['reasoning_trace'])} inference steps; "
-                    f"recommended {knowledge_result['recommended_supplier']['supplier_id'] if knowledge_result['recommended_supplier'] else 'N/A'}.",
+        "summary": f"Forward-chained {len(knowledge_result['reasoning_trace'])} inference steps; " + (
+            f"split the order across {len(knowledge_result['allocations'])} suppliers."
+            if knowledge_result.get("split_order")
+            else f"recommended {knowledge_result['recommended_supplier']['supplier_id'] if knowledge_result['recommended_supplier'] else 'N/A'}."
+        ),
     })
 
     t3 = time.perf_counter()

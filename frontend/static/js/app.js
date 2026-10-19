@@ -577,6 +577,24 @@ async function runPipeline(skuId) {
   }
 }
 
+function splitAllocationsTable(lines) {
+  return `
+    <div class="overflow-x-auto mt-3">
+      <table class="table-clean w-full">
+        <thead><tr><th>Supplier</th><th>Quantity</th><th>Unit Cost</th><th>Cost</th><th>Arrives</th><th>Status</th></tr></thead>
+        <tbody>${lines.map((l) => `
+          <tr>
+            <td class="font-medium text-heading">${esc(l.supplier_id)}</td>
+            <td class="tabular">${fmtNum(l.quantity)} <span class="text-muted">/ ${fmtNum(l.available_qty)}${simBadge()}</span></td>
+            <td class="tabular">${fmtCurrency(l.unit_cost)}</td>
+            <td class="tabular">${fmtCurrency(l.expense)}</td>
+            <td>${fmtDate(l.estimated_arrival_date)}</td>
+            <td><span class="badge ${statusBadgeClass(l.supplier_status)}">${esc(l.supplier_status)}</span></td>
+          </tr>`).join("")}</tbody>
+      </table>
+    </div>`;
+}
+
 function renderPipelineResult(result) {
   const container = document.getElementById("pipeline-result");
   const focus = result.focus_fact;
@@ -599,8 +617,13 @@ function renderPipelineResult(result) {
             <div><div class="text-xs text-muted">Status</div><div>${focus.Urgent ? '<span class="badge badge-urgent badge-live">Urgent Procurement</span>' : '<span class="badge badge-standard">Monitoring</span>'}</div></div>
           </div>` : `<p class="text-sm text-muted">No focus SKU.</p>`}
 
-        <h3 class="font-semibold text-heading mt-5 mb-2 text-sm">Recommended Supplier</h3>
-        ${rec ? `
+        <h3 class="font-semibold text-heading mt-5 mb-2 text-sm">${plan?.split_order ? "Split Order" : "Recommended Supplier"}</h3>
+        ${plan?.split_order ? `
+          <div class="border border-soft rounded-lg p-3 text-sm">
+            <div class="font-medium text-heading">Order split across ${plan.allocations.length} suppliers</div>
+            <div class="text-xs text-body mt-1">No single supplier can supply ${fmtNum(sup.required_quantity)} units alone (combined availability ${fmtNum(sup.combined_available_qty)}${simBadge()}). The order is filled from the best-ranked suppliers in turn; High Risk suppliers are used only where the others cannot cover it.</div>
+            ${splitAllocationsTable(plan.allocations)}
+          </div>` : rec ? `
           <div class="border border-soft rounded-lg p-3 text-sm flex items-center justify-between">
             <div>
               <div class="font-medium text-heading">${esc(rec.supplier_id)}</div>
@@ -610,7 +633,7 @@ function renderPipelineResult(result) {
           </div>` : sup.no_eligible_supplier ? `
           <div class="border border-soft rounded-lg p-3 text-sm">
             <div class="font-medium text-danger">No supplier selected</div>
-            <div class="text-xs text-body mt-1">None of the ${sup.pool_size} candidates can supply ${fmtNum(sup.required_quantity)} units alone (combined availability ${fmtNum(sup.combined_available_qty)}${simBadge()}). ${sup.split_order_possible ? "A split order across suppliers could cover it — not implemented yet." : "Even a split order could not cover it."}</div>
+            <div class="text-xs text-body mt-1">None of the ${sup.pool_size} candidates can supply ${fmtNum(sup.required_quantity)} units alone (combined availability ${fmtNum(sup.combined_available_qty)}${simBadge()}). Even a split order across suppliers could not cover it.</div>
           </div>` : `<p class="text-sm text-muted">No eligible supplier.</p>`}
 
         ${plan && plan.error ? `<p class="text-sm text-body mt-4">${esc(plan.error)}</p>` : ""}
@@ -619,7 +642,7 @@ function renderPipelineResult(result) {
         <h3 class="font-semibold text-heading mt-5 mb-2 text-sm">Plan Snapshot</h3>
         <div class="grid grid-cols-2 gap-3 text-sm">
           <div><div class="text-xs text-muted">Order Qty</div><div class="font-medium text-heading tabular">${fmtNum(plan.order_quantity)}</div></div>
-          <div><div class="text-xs text-muted">Est. Arrival</div><div class="font-medium text-heading">${fmtDate(plan.estimated_arrival_date)}</div></div>
+          <div><div class="text-xs text-muted">${plan.split_order ? "Order Complete By" : "Est. Arrival"}</div><div class="font-medium text-heading">${fmtDate(plan.estimated_arrival_date)}</div></div>
           <div><div class="text-xs text-muted">Total Expense</div><div class="font-medium text-heading tabular">${fmtCurrency(plan.total_expense)}</div></div>
           <div><div class="text-xs text-muted">Backup Supplier</div><div class="font-medium text-heading">${esc(plan.backup_supplier_id || "—")}</div></div>
         </div>
@@ -1237,7 +1260,7 @@ function renderSuppliersView(data) {
       </div>` : `
       <div class="card p-6 text-sm">
         <div class="font-semibold text-danger">No eligible supplier for ${fmtNum(data.required_quantity)} units</div>
-        <p class="text-body mt-1">Combined availability across all ${data.pool_size} candidates is ${fmtNum(data.combined_available_qty)} units${simBadge()}. No supplier is ranked or recommended.</p>
+        <p class="text-body mt-1">Combined availability across all ${data.pool_size} candidates is ${fmtNum(data.combined_available_qty)} units${simBadge()}. ${data.split_order_possible ? "No single supplier can cover it, but the order can be split across suppliers — run the Agent Pipeline for this SKU to see the split plan." : "Even a split order could not cover it. No supplier is ranked or recommended."}</p>
       </div>`}
 
       ${data.ineligible_suppliers.length ? `
@@ -1482,10 +1505,14 @@ async function loadActionView() {
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
           <div>
             <div class="text-xs text-muted uppercase tracking-wide">Complete Action Plan</div>
-            <div class="text-lg font-bold text-heading">${esc(focus.SKU)} → ${esc(plan.primary_supplier_id)}</div>
+            <div class="text-lg font-bold text-heading">${esc(focus.SKU)} → ${plan.split_order ? plan.allocations.map((l) => esc(l.supplier_id)).join(" + ") : esc(plan.primary_supplier_id)}</div>
           </div>
-          <span class="badge ${statusBadgeClass(rec?.supplier_status)}">${esc(rec?.supplier_status || "N/A")}</span>
+          ${plan.split_order
+            ? `<span class="badge badge-standard">Split order · ${plan.allocations.length} suppliers</span>`
+            : `<span class="badge ${statusBadgeClass(rec?.supplier_status)}">${esc(rec?.supplier_status || "N/A")}</span>`}
         </div>
+
+        ${plan.split_order ? `<div class="mb-6">${splitAllocationsTable(plan.allocations)}</div>` : ""}
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           ${planStat("Recommended Order Qty", fmtNum(plan.order_quantity) + " units")}
@@ -1529,9 +1556,25 @@ async function loadActionView() {
         estimated_arrival: plan.estimated_arrival_date,
         backup_supplier_id: plan.backup_supplier_id,
       };
-      const res = await Api.approveOrder(payload);
-      document.getElementById("approve-status").textContent = `✓ Purchase Order #${res.purchase_order.id} approved.`;
-      toast("Purchase order approved and logged.", "success");
+      if (plan.split_order) {
+        const res = await Api.approveSplitOrder({
+          sku_id: focus.sku_id,
+          allocations: plan.allocations.map((l) => ({
+            supplier_id: l.supplier_id,
+            quantity: l.quantity,
+            unit_cost: l.unit_cost,
+            estimated_arrival: l.estimated_arrival_date,
+          })),
+          backup_supplier_id: plan.backup_supplier_id,
+        });
+        document.getElementById("approve-status").textContent =
+          `✓ ${res.purchase_orders.length} purchase orders approved (#${res.purchase_orders.map((p) => p.id).join(", #")}).`;
+        toast("Split order approved: one purchase order per supplier.", "success");
+      } else {
+        const res = await Api.approveOrder(payload);
+        document.getElementById("approve-status").textContent = `✓ Purchase Order #${res.purchase_order.id} approved.`;
+        toast("Purchase order approved and logged.", "success");
+      }
       const hist = (await Api.orders()).purchase_orders;
       document.querySelectorAll(".order-history-root").forEach((el) => (el.outerHTML = renderOrderHistory(hist)));
       e.target.textContent = "Approved ✓";

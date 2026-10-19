@@ -27,6 +27,7 @@ const Api = (() => {
       return _req(`/api/suppliers?${qs}`);
     },
     approveOrder: (payload) => _req("/api/approve-order", { method: "POST", body: JSON.stringify(payload) }),
+    approveSplitOrder: (payload) => _req("/api/approve-split-order", { method: "POST", body: JSON.stringify(payload) }),
     orders: () => _req("/api/orders"),
   };
 })();

@@ -16,6 +16,8 @@ Rules
   R2  IF LeadTime <= 3d AND DefectRate <= 0.05          THEN "Preferred"
   R3  IF DefectRate > 0.05                              THEN "High Risk"
   R4  IF no prior status AND FulfillmentRate >= 0.90    THEN "Reliable" ELSE "Standard"
+  R6  IF no single supplier can cover RequiredQty but the pool combined can
+      THEN split the order across suppliers in rank order, safe suppliers first
 
 R2 used a KPI "Rating" that only existed through the removed KPI-vendor→SUP_x
 mapping; its quality condition now reuses R3's existing defect threshold, so no
@@ -265,6 +267,68 @@ def evaluate_supplier(candidate: dict, required_quantity: float, trace: list[dic
     return {**candidate, "supplier_status": final_status, "status_flags": statuses}
 
 
+def allocate_split_order(candidates: list[dict], required_quantity: float, trace: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Rule 6 (Split Order) — used only when no single supplier can cover the request.
+
+      R6  IF no supplier has AvailableQty >= RequiredQty AND combined AvailableQty >= RequiredQty
+          THEN fill the order from suppliers in heuristic-rank order, taking
+          min(AvailableQty, remaining) from each, until the order is covered.
+          Suppliers NOT flagged High Risk are used first; High Risk ones only if the
+          safe suppliers cannot cover the order on their own.
+
+    Returns (allocations, unallocated). Each allocation is the supplier's fully
+    annotated record (R5, R2–R4 evaluated for the quantity it is asked to supply)
+    plus `allocated_qty` / `allocation_order`. Unallocated suppliers keep their risk
+    status so the Planning Agent can pick a backup from them.
+    """
+    # Risk status depends only on defect rate / lead time / fulfillment, not on the
+    # quantity, so classify quietly first (scratch trace) to decide the fill order.
+    scratch: list[dict] = []
+    status_by_id = {c["supplier_id"]: evaluate_supplier(c, 0, scratch)["supplier_status"] for c in candidates}
+    safe = [c for c in candidates if status_by_id[c["supplier_id"]] != "High Risk"]
+    risky = [c for c in candidates if status_by_id[c["supplier_id"]] == "High Risk"]
+
+    plan_shares: list[tuple[dict, int]] = []
+    unallocated: list[dict] = []
+    remaining = int(required_quantity)
+    for c in safe + risky:
+        if remaining <= 0:
+            unallocated.append({**c, "supplier_status": status_by_id[c["supplier_id"]]})
+            continue
+        share = int(min(c["available_qty"], remaining))
+        plan_shares.append((c, share))
+        remaining -= share
+
+    covered = sum(share for _, share in plan_shares)
+    text = (
+        f"No supplier can fulfil RequiredQty({int(required_quantity)}) alone — splitting the order across "
+        f"{len(plan_shares)} suppliers in heuristic-rank order (non-High-Risk first)."
+    )
+    trace.append({
+        "type": "rule", "ruleId": 6, "name": "Split Order",
+        "entity": "Order", "ifText": "IF no single supplier has AvailableQty >= RequiredQty AND combined AvailableQty >= RequiredQty",
+        "thenText": "THEN allocate min(AvailableQty, remaining) to each supplier in rank order, safe suppliers first",
+        "elseText": None,
+        "conditions": [
+            _condition("Combined AvailableQty", sum(int(c["available_qty"]) for c in candidates), ">=", int(required_quantity),
+                       sum(int(c["available_qty"]) for c in candidates) >= int(required_quantity)),
+        ],
+        "logic": None, "matched": covered >= int(required_quantity), "outcome": "Split Order",
+        "text": f"✓ Rule Evaluated → {text}  [Rule 6: {'MATCHED' if covered >= int(required_quantity) else 'not matched'}]",
+    })
+
+    allocations: list[dict] = []
+    for i, (c, share) in enumerate(plan_shares, start=1):
+        annotated = evaluate_supplier(c, share, trace)
+        annotated["allocated_qty"] = share
+        annotated["allocation_order"] = i
+        allocations.append(annotated)
+
+    summary = " + ".join(f"{a['supplier_id']} {a['allocated_qty']}" for a in allocations) + f" = {covered} units"
+    trace.append(_decision_entry(None, None, f"Split order: {summary}", f"✓ Decision Made → Split order: {summary}"))
+    return allocations, unallocated
+
+
 def run(perception_result: dict, supplier_result: dict) -> dict:
     trace: list[dict] = []
 
@@ -274,17 +338,36 @@ def run(perception_result: dict, supplier_result: dict) -> dict:
         inventory_state = evaluate_inventory_state(focus_facts[0], trace)
 
     required = supplier_result.get("required_quantity", 0)
-    annotated_candidates = [
-        evaluate_supplier(c, required, trace) for c in supplier_result.get("ranked_candidates", [])
-    ]
-    ineligible_candidates = [
-        evaluate_supplier(c, required, trace) for c in supplier_result.get("ineligible_suppliers", [])
-    ]
+    split_mode = bool(
+        not supplier_result.get("ranked_candidates")
+        and supplier_result.get("split_order_possible")
+        and supplier_result.get("split_candidates")
+    )
+
+    allocations: list[dict] = []
+    backup_candidates: list[dict] = []
+    if split_mode:
+        # No single supplier is eligible, so the single-supplier capacity rule (R5) is
+        # not applied to the pool as a whole; each allocated share is checked instead.
+        allocations, backup_candidates = allocate_split_order(supplier_result["split_candidates"], required, trace)
+        annotated_candidates = allocations
+        ineligible_candidates: list[dict] = []
+    else:
+        annotated_candidates = [
+            evaluate_supplier(c, required, trace) for c in supplier_result.get("ranked_candidates", [])
+        ]
+        ineligible_candidates = [
+            evaluate_supplier(c, required, trace) for c in supplier_result.get("ineligible_suppliers", [])
+        ]
 
     preferred = [c for c in annotated_candidates if c["supplier_status"] == "Preferred"]
     high_risk = [c for c in annotated_candidates if c["supplier_status"] == "High Risk"]
 
-    recommended = next((c for c in annotated_candidates if c["supplier_status"] != "High Risk"), None)
+    if split_mode:
+        # The lead supplier of a split order is the first allocation (largest priority).
+        recommended = allocations[0] if allocations else None
+    else:
+        recommended = next((c for c in annotated_candidates if c["supplier_status"] != "High Risk"), None)
     if recommended is None and annotated_candidates:
         recommended = annotated_candidates[0]
         trace.append(_decision_entry(
@@ -306,6 +389,9 @@ def run(perception_result: dict, supplier_result: dict) -> dict:
     return {
         "agent": "Knowledge Agent",
         "inventory_state": inventory_state,
+        "split_order": split_mode,
+        "allocations": allocations,
+        "backup_candidates": backup_candidates,
         "annotated_candidates": annotated_candidates,
         "ineligible_candidates": ineligible_candidates,
         "preferred_suppliers": preferred,

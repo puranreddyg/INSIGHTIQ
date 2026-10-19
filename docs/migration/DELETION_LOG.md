@@ -75,6 +75,7 @@ Every deletion below is of a derived database artefact, code, or behaviour.
 - **Future impact:** Split-order optimisation can be added later; combined availability is reported
 - **Preserved in backup:** git history
 - **Replaced by:** no_eligible_supplier result, no recommendation, no plan
+- **Later change (2026-10-19):** a *safe* split order was added (Knowledge Agent Rule 6). It only runs when no single supplier can cover the request but the pool's combined `available_qty` can; each supplier is asked for at most its own `available_qty`, safe suppliers are used first, High Risk suppliers only to finish the order, and the plan's total always equals the required quantity. When even the combined stock is short, the result is still `no_eligible_supplier` with no plan. The old behaviour (ranking suppliers that could not fulfil the order) was not restored.
 
 ## 10. API GET /api/products
 - **Count:** 1 endpoint

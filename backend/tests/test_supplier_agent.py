@@ -196,16 +196,19 @@ def test_min_max_ignores_ineligible_suppliers():
     assert components(result, "B")["cost"] == pytest.approx(0.0)
 
 
-def test_no_eligible_supplier_selects_nobody():
-    """Unlike the old split-order fallback, nobody is ranked or recommended."""
+def test_no_eligible_supplier_is_never_named_a_sole_supplier_but_the_order_is_split():
+    """No supplier is ranked as a *sole* supplier; the Knowledge Agent splits the order instead."""
     result = rank([supplier("A", avail=300), supplier("B", avail=250)], required=500)
     assert result["no_eligible_supplier"] is True
     assert result["ranked_candidates"] == [] and result["primary_supplier"] is None
     assert result["combined_available_qty"] == 550
     assert result["split_order_possible"] is True
+    assert {c["supplier_id"] for c in result["split_candidates"]} == {"A", "B"}
     knowledge = knowledge_agent.run({"focus_facts": []}, result)
-    assert knowledge["recommended_supplier"] is None
-    assert {c["supplier_status"] for c in knowledge["ineligible_candidates"]} == {"Ineligible"}
+    assert knowledge["split_order"] is True
+    allocations = {a["supplier_id"]: a["allocated_qty"] for a in knowledge["allocations"]}
+    assert sum(allocations.values()) == 500 and all(v <= {"A": 300, "B": 250}[k] for k, v in allocations.items())
+    assert knowledge["ineligible_candidates"] == []
 
 
 def test_split_order_not_possible_when_combined_availability_is_short():

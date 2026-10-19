@@ -139,8 +139,116 @@ def build_plan(
     }
 
 
+_SEASON_BY_MONTH = ["Winter", "Winter", "Spring", "Spring", "Spring", "Summer", "Summer", "Summer", "Fall", "Fall", "Fall", "Winter"]
+
+
+def build_split_plan(
+    conn: sqlite3.Connection,
+    sku_fact: dict,
+    allocations: list[dict],
+    backup_candidates: list[dict],
+    required_quantity: float,
+) -> dict:
+    """Plan an order that no single supplier could cover: one purchase line per
+    allocated supplier, each with its own cost and arrival date. The order is
+    complete when the last supplier delivers."""
+    today = datetime.now().date()
+    season_delays = _seasonality_delay_map(conn)
+    trace: list[str] = [
+        f"No single supplier can fulfil {int(required_quantity)} units, so the order is split across "
+        f"{len(allocations)} suppliers (safe suppliers first, in heuristic-rank order)."
+    ]
+
+    lines: list[dict] = []
+    arrivals: dict[date, int] = {}
+    for a in allocations:
+        qty = int(a["allocated_qty"])
+        base_days = max(1, round(a.get("lead_time_days", 5)))
+        naive = _add_working_days(today, base_days)
+        season = _SEASON_BY_MONTH[naive.month - 1]
+        extra = season_delays.get(season, 0)
+        arrival = _add_working_days(naive, extra) if extra else naive
+        unit_cost = float(a.get("unit_cost", 0))
+        expense = round(qty * unit_cost, 2)
+        arrivals[arrival] = arrivals.get(arrival, 0) + qty
+        lines.append({
+            "supplier_id": a["supplier_id"],
+            "supplier_status": a.get("supplier_status"),
+            "quantity": qty,
+            "available_qty": int(a["available_qty"]),
+            "unit_cost": round(unit_cost, 2),
+            "expense": expense,
+            "lead_time_working_days": base_days,
+            "seasonality_delay_days": extra,
+            "season": season,
+            "estimated_arrival_date": arrival.isoformat(),
+        })
+        trace.append(
+            f"{a['supplier_id']}: {qty} of {a['available_qty']} available × ₹{unit_cost:.2f} = ₹{expense:,.2f}; "
+            f"{base_days} working days"
+            + (f" + {extra} seasonal buffer" if extra else "")
+            + f" → arrives {arrival.isoformat()}."
+        )
+
+    order_quantity = sum(line["quantity"] for line in lines)
+    total_expense = round(sum(line["expense"] for line in lines), 2)
+    final_arrival = max(date.fromisoformat(line["estimated_arrival_date"]) for line in lines)
+    last_line = max(lines, key=lambda l: l["estimated_arrival_date"])
+    trace.append(
+        f"Order quantity {order_quantity} units; total expense ₹{total_expense:,.2f}; "
+        f"complete when the last supplier delivers on {final_arrival.isoformat()}."
+    )
+
+    lead_ids = {line["supplier_id"] for line in lines}
+    spare = [c for c in backup_candidates if c["supplier_id"] not in lead_ids]
+    backup = next((c for c in spare if c.get("supplier_status") != "High Risk"), None)
+    if backup:
+        trace.append(f"Backup supplier designated: {backup['supplier_id']} (not used in the split, rank #{backup.get('rank', '?')}).")
+    else:
+        trace.append("No unused, non-High-Risk supplier is available as a backup.")
+
+    daily_demand = max(1, round(sku_fact.get("DailyDemand") or 0))
+    trace.append(f"Daily demand {daily_demand} units = mean real Units_Sold over the last 28 days of the {sku_fact.get('focus_scope', 'lanes')}.")
+    level = sku_fact.get("Inventory", 0)
+    horizon_days = max((final_arrival - today).days + 7, 7)
+    curve = []
+    for i in range(horizon_days + 1):
+        day = today + timedelta(days=i)
+        if day in arrivals:
+            level += arrivals[day]
+        else:
+            level = max(0, level - daily_demand)
+        curve.append({"date": day.isoformat(), "projected_inventory": level})
+
+    return {
+        "agent": "Planning Agent",
+        "status": "planned",
+        "split_order": True,
+        "sku_id": sku_fact["sku_id"],
+        "order_quantity": order_quantity,
+        "allocations": lines,
+        "primary_supplier_id": lines[0]["supplier_id"],
+        "backup_supplier_id": backup["supplier_id"] if backup else None,
+        "order_date": today.isoformat(),
+        "estimated_arrival_date": final_arrival.isoformat(),
+        "base_lead_time_working_days": max(line["lead_time_working_days"] for line in lines),
+        "seasonality_delay_days": last_line["seasonality_delay_days"],
+        "season": last_line["season"],
+        "unit_cost": round(total_expense / order_quantity, 2) if order_quantity else 0,  # blended
+        "total_expense": total_expense,
+        "daily_demand_estimate": daily_demand,
+        "replenishment_curve": curve,
+        "reasoning": trace,
+    }
+
+
 def run(conn: sqlite3.Connection, sku_fact: dict | None, knowledge_result: dict, required_quantity: float,
         supplier_result: dict | None = None) -> dict:
+    if required_quantity and knowledge_result.get("split_order") and knowledge_result.get("allocations"):
+        return build_split_plan(
+            conn, sku_fact, knowledge_result["allocations"],
+            knowledge_result.get("backup_candidates", []), required_quantity,
+        )
     primary = knowledge_result.get("recommended_supplier")
     candidates = knowledge_result.get("annotated_candidates", [])
     alternatives = [c for c in candidates if primary and c["supplier_id"] != primary["supplier_id"]]

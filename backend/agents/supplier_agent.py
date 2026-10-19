@@ -222,6 +222,17 @@ def rank_suppliers(
     ]
     combined = int(scorable["available_qty"].sum()) if not scorable.empty else 0
     no_eligible = bool(len(scorable)) and eligible.empty and required_quantity > 0
+    split_possible = no_eligible and combined >= required_quantity
+
+    # When no single supplier can cover the request but the pool together can, the
+    # whole scorable pool is ranked (scores relative to that pool) so the Knowledge
+    # Agent can allocate the order across suppliers. `ranked_candidates` stays empty:
+    # nobody is recommended as a *sole* supplier.
+    split_candidates: list[dict] = []
+    if split_possible:
+        pool_scored = score_candidates(scorable, weights).sort_values("raw_score", ascending=False).reset_index(drop=True)
+        pool_scored["rank"] = pool_scored.index + 1
+        split_candidates = _candidate_records(pool_scored, weights)
 
     return {
         "agent": "Supplier Intelligence Agent",
@@ -234,8 +245,10 @@ def rank_suppliers(
         "unscorable_suppliers": unscorable,
         "no_eligible_supplier": no_eligible,
         "combined_available_qty": combined,
-        # Future split-order allocation could cover the request; not implemented.
-        "split_order_possible": no_eligible and combined >= required_quantity,
+        # True when no single supplier can cover the request but the pool combined can.
+        # The Knowledge Agent then allocates the order across `split_candidates`.
+        "split_order_possible": split_possible,
+        "split_candidates": split_candidates,
         "ranked_candidates": candidates,
         "primary_supplier": candidates[0] if candidates else None,
         "backup_supplier": candidates[1] if len(candidates) > 1 else None,

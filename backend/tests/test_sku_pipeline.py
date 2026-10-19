@@ -54,11 +54,15 @@ def urgent(conn):
 # ---------------------------------------------------------------------------
 
 def test_raw_source_files_are_byte_identical_to_the_recorded_checksums():
+    """The checksums were recorded on Windows (CRLF working copy); git stores the same
+    files with LF. Content must match exactly; only the line-ending convention may differ."""
     manifest = config.DATASET_DIR / "CHECKSUMS.sha256"
     for line in manifest.read_text(encoding="utf-8").splitlines():
         digest, name = line.split(" *", 1)
-        path = config.DATASET_DIR / name.removeprefix("./")
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == digest, name
+        data = (config.DATASET_DIR / name.removeprefix("./")).read_bytes()
+        as_is = hashlib.sha256(data).hexdigest()
+        as_crlf = hashlib.sha256(data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")).hexdigest()
+        assert digest in (as_is, as_crlf), name
 
 
 def test_full_supply_chain_time_series_is_retained(conn):
@@ -176,13 +180,67 @@ def test_recommendations_differ_across_urgent_skus(conn, urgent):
     assert len(recommended) >= 3
 
 
-def test_no_eligible_supplier_selects_nobody_end_to_end(conn, urgent):
-    blocked = [r for r in urgent if not supplier_agent.rank_suppliers(conn, r["sku_id"], r["RequiredQuantity"])["eligible_count"]]
+def _blocked(conn, urgent):
+    """Urgent SKUs where no single supplier can cover the whole request."""
+    return [r for r in urgent if not supplier_agent.rank_suppliers(conn, r["sku_id"], r["RequiredQuantity"])["eligible_count"]]
+
+
+def test_no_supplier_is_selected_when_even_the_combined_stock_is_short(conn):
+    focus = perception_agent.observe_sku(conn, "SKU_44")
+    impossible = 10**6
+    sup = supplier_agent.rank_suppliers(conn, "SKU_44", impossible)
+    assert sup["no_eligible_supplier"] and not sup["split_order_possible"] and sup["split_candidates"] == []
+    know = knowledge_agent.run({"focus_facts": [focus]}, sup)
+    assert know["recommended_supplier"] is None and know["split_order"] is False and know["allocations"] == []
+    from backend.agents import planning_agent
+    plan = planning_agent.run(conn, focus, know, impossible, sup)
+    assert plan["status"] == "no_eligible_supplier" and "order_quantity" not in plan
+
+
+def test_split_order_covers_a_request_no_single_supplier_can(conn, urgent):
+    blocked = _blocked(conn, urgent)
     assert blocked, "expected at least one urgent SKU with no single eligible supplier"
-    result = coordinator_agent.run_pipeline(conn, blocked[0]["sku_id"])
-    assert result["knowledge"]["recommended_supplier"] is None
-    assert result["planning"]["status"] == "no_eligible_supplier"
-    assert "order_quantity" not in result["planning"]
+    for r in blocked:
+        result = coordinator_agent.run_pipeline(conn, r["sku_id"])
+        plan, know = result["planning"], result["knowledge"]
+        assert plan["status"] == "planned" and plan["split_order"] is True
+        lines = plan["allocations"]
+        ids = [l["supplier_id"] for l in lines]
+        assert len(lines) >= 2 and len(set(ids)) == len(ids)
+        # exactly the required quantity, never more than any supplier has, only real suppliers of the SKU
+        assert sum(l["quantity"] for l in lines) == plan["order_quantity"] == r["RequiredQuantity"]
+        available = {c["supplier_id"]: c["available_qty"] for c in supplier_agent.full_matrix(conn, r["sku_id"])["ranked_candidates"]}
+        assert all(0 < l["quantity"] <= available[l["supplier_id"]] for l in lines)
+        # cost and delivery roll up from the lines
+        assert plan["total_expense"] == pytest.approx(sum(l["expense"] for l in lines), abs=0.02)
+        assert plan["estimated_arrival_date"] == max(l["estimated_arrival_date"] for l in lines)
+        assert know["split_order"] is True and know["recommended_supplier"]["supplier_id"] == ids[0]
+        assert plan["backup_supplier_id"] not in ids
+
+
+def test_split_uses_high_risk_suppliers_only_when_the_safe_ones_cannot_cover_it(conn, urgent):
+    for r in _blocked(conn, urgent):
+        lines = coordinator_agent.run_pipeline(conn, r["sku_id"])["planning"]["allocations"]
+        safe_before_risky = [l["supplier_status"] != "High Risk" for l in lines]
+        assert safe_before_risky == sorted(safe_before_risky, reverse=True)
+        pool = supplier_agent.full_matrix(conn, r["sku_id"])["ranked_candidates"]
+        safe_capacity = sum(c["available_qty"] for c in pool if c["defect_rate"] <= config.RULE_HIGH_RISK_DEFECT_RATE)
+        if any(l["supplier_status"] == "High Risk" for l in lines):
+            assert safe_capacity < r["RequiredQuantity"]
+
+
+def test_split_allocation_unit_behaviour():
+    cands = [
+        _candidate(supplier_id="A", available_qty=300, defect_rate=0.02),   # safe, rank 1
+        _candidate(supplier_id="B", available_qty=450, defect_rate=0.10),   # High Risk, rank 2
+        _candidate(supplier_id="C", available_qty=200, defect_rate=0.03),   # safe, rank 3
+    ]
+    allocs, spare = knowledge_agent.allocate_split_order(cands, 700, [])
+    assert [(a["supplier_id"], a["allocated_qty"]) for a in allocs] == [("A", 300), ("C", 200), ("B", 200)]
+    assert spare == []
+    allocs, spare = knowledge_agent.allocate_split_order(cands, 450, [])   # safe suppliers suffice -> B unused
+    assert [(a["supplier_id"], a["allocated_qty"]) for a in allocs] == [("A", 300), ("C", 150)]
+    assert [s["supplier_id"] for s in spare] == ["B"] and spare[0]["supplier_status"] == "High Risk"
 
 
 def test_non_urgent_sku_produces_no_purchase_order(conn):
@@ -194,7 +252,7 @@ def test_non_urgent_sku_produces_no_purchase_order(conn):
 def test_planned_order_never_exceeds_the_primary_suppliers_availability(conn, urgent):
     for r in urgent:
         plan = coordinator_agent.run_pipeline(conn, r["sku_id"])["planning"]
-        if plan["status"] == "planned":
+        if plan["status"] == "planned" and not plan.get("split_order"):
             rec = supplier_agent.rank_suppliers(conn, r["sku_id"], r["RequiredQuantity"])
             available = {c["supplier_id"]: c["available_qty"] for c in rec["ranked_candidates"]}
             assert plan["order_quantity"] <= available[plan["primary_supplier_id"]]
@@ -278,6 +336,35 @@ def test_approve_order_validates_relationship_and_availability(client, conn):
     created = client.post("/api/approve-order", json=base)
     assert created.status_code == 200
     assert created.json()["purchase_order"]["sku_id"] == ok["sku_id"]
+
+
+def test_split_order_approval_is_all_or_nothing(client):
+    plan = client.post("/api/run-agent-pipeline?sku_id=SKU_44").json()["planning"]
+    assert plan["split_order"] is True
+    lines = [{"supplier_id": l["supplier_id"], "quantity": l["quantity"], "unit_cost": l["unit_cost"],
+              "estimated_arrival": l["estimated_arrival_date"]} for l in plan["allocations"]]
+
+    def count():
+        return len(client.get("/api/orders?limit=500").json()["purchase_orders"])
+
+    before = count()
+    too_big = [dict(lines[0]), {**lines[1], "quantity": 10_000}] + lines[2:]          # 2nd line exceeds availability
+    assert client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": too_big}).status_code == 422
+    duplicate = [lines[0], dict(lines[0])]
+    assert client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": duplicate}).status_code == 422
+    foreign = [lines[0], {**lines[1], "supplier_id": "SUP_999"}]
+    assert client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": foreign}).status_code == 422
+    assert client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": []}).status_code == 422
+    assert count() == before, "a rejected split order must not create any purchase order"
+
+    ok = client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": lines,
+                                                         "backup_supplier_id": plan["backup_supplier_id"]})
+    assert ok.status_code == 200
+    created = ok.json()["purchase_orders"]
+    assert [p["supplier_id"] for p in created] == [l["supplier_id"] for l in lines]
+    assert sum(p["quantity"] for p in created) == plan["order_quantity"]
+    assert all(p["sku_id"] == "SKU_44" and p["status"] == "Approved" for p in created)
+    assert count() == before + len(lines)
 
 
 def test_existing_purchase_orders_survive_a_schema_migration(tmp_path, monkeypatch):

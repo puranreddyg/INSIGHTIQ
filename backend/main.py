@@ -220,6 +220,65 @@ def approve_order(payload: ApproveOrderRequest):
     return {"status": "approved", "purchase_order": dict(row)}
 
 
+class SplitLine(BaseModel):
+    supplier_id: str
+    quantity: int
+    unit_cost: float
+    estimated_arrival: Optional[str] = None
+
+
+class ApproveSplitOrderRequest(BaseModel):
+    sku_id: str
+    allocations: list[SplitLine]
+    backup_supplier_id: Optional[str] = None
+
+
+@app.post("/api/approve-split-order")
+def approve_split_order(payload: ApproveSplitOrderRequest):
+    """Approve a split order: one purchase order per supplier, created all-or-nothing.
+    Every line is validated first; if any line is invalid, no purchase order is created."""
+    if not payload.allocations:
+        raise HTTPException(status_code=422, detail="allocations must not be empty")
+    supplier_ids = [line.supplier_id for line in payload.allocations]
+    if len(set(supplier_ids)) != len(supplier_ids):
+        raise HTTPException(status_code=422, detail="each supplier may appear only once in a split order")
+    with connect() as conn:
+        _require_sku(conn, payload.sku_id)
+        for line in payload.allocations:
+            if line.quantity <= 0:
+                raise HTTPException(status_code=422, detail=f"{line.supplier_id}: quantity must be positive")
+            profile = conn.execute(
+                "SELECT available_qty FROM supplier_sku_profile WHERE sku_id = ? AND supplier_id = ?",
+                (payload.sku_id, line.supplier_id),
+            ).fetchone()
+            if profile is None:
+                raise HTTPException(status_code=422, detail=f"{line.supplier_id} does not supply {payload.sku_id}")
+            if line.quantity > profile["available_qty"]:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"{line.supplier_id} has {profile['available_qty']} units of {payload.sku_id} available; "
+                           f"{line.quantity} requested",
+                )
+
+        po_ids = []
+        for line in payload.allocations:
+            cur = conn.execute(
+                """INSERT INTO purchase_orders
+                   (sku_id, product_name, supplier_id, supplier_name, quantity, unit_cost,
+                    total_cost, order_date, estimated_arrival, backup_supplier_id, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    payload.sku_id, payload.sku_id, line.supplier_id, line.supplier_id, line.quantity,
+                    line.unit_cost, round(line.quantity * line.unit_cost, 2), datetime.now().date().isoformat(),
+                    line.estimated_arrival, payload.backup_supplier_id, "Approved",
+                ),
+            )
+            po_ids.append(cur.lastrowid)
+        conn.commit()
+        rows = [dict(conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (i,)).fetchone()) for i in po_ids]
+    return {"status": "approved", "purchase_orders": rows}
+
+
 @app.get("/api/orders")
 def purchase_orders(limit: int = 50):
     with connect() as conn:
