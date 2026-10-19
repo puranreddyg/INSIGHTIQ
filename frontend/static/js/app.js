@@ -142,14 +142,28 @@ function statusBadgeClass(status) {
   const map = {
     "Preferred": "badge-preferred", "High Risk": "badge-risk",
     "Standard": "badge-standard", "Reliable": "badge-reliable",
-    "Ineligible": "badge-ineligible",
+    "Ineligible": "badge-ineligible", "Unrated": "badge-unrated",
   };
   return map[status] || "badge-standard";
 }
 
-// Marks a value that comes from the simulated supplier-SKU profile, not observed data.
-function simBadge() {
-  return `<span class="badge-sim" title="Simulated — DataSets/simulated/README.md">SIM</span>`;
+// Marks a value ESTIMATED from real history (backend/ml/supplier_estimator.py), not observed directly.
+function estBadge(title = "Estimated from real history — capacity = largest order this supplier has delivered; quality = real industry baseline until the supplier has records of its own") {
+  return `<span class="badge-est" title="${esc(title)}">EST</span>`;
+}
+
+// Marks a value PREDICTED by the trained demand forecaster.
+function aiBadge(title = "Predicted by the demand-forecast model trained on 91,250 real daily sales rows") {
+  return `<span class="badge-ai" title="${esc(title)}">AI</span>`;
+}
+
+function pct(p) {
+  return p == null ? "—" : `${Math.round(p * 100)}%`;
+}
+
+function riskBadge(p) {
+  const cls = p >= 0.5 ? "badge-urgent" : p >= 0.1 ? "badge-active" : "badge-standard";
+  return `<span class="badge ${cls} tabular" title="Probability that forecast demand before a new order can arrive exceeds current stock">${pct(p)}</span>`;
 }
 
 async function ensureSkus() {
@@ -319,16 +333,18 @@ function renderDashboard(data) {
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        ${kpiCard("Critical Low Stock SKUs", fmtNum(k.critical_low_stock_skus), "urgent", "SKUs with a warehouse below reorder point")}
+        ${kpiCard("Critical Low Stock SKUs", fmtNum(k.critical_low_stock_skus), "urgent", "Below the planner's or the AI-forecast reorder point")}
         ${kpiCard("Active Purchase Orders", fmtNum(k.active_purchase_orders), "info", "Approved & in flight")}
         ${kpiCard("Avg Supplier Lead Time", `${k.avg_supplier_lead_time_days ?? "—"}d`, "neutral", "Across all SKU-warehouse lanes")}
-        ${kpiCard("Avg Supplier Fulfillment", `${k.avg_supplier_fulfillment_rate ?? "—"}%`, "good", "Simulated supplier-level rate")}
+        ${kpiCard("Avg Supplier Fulfillment", `${k.avg_supplier_fulfillment_rate ?? "—"}%`, "good", "Estimated: real industry baseline (no per-supplier records yet)")}
       </div>
+
+      ${data.forecast_accuracy ? forecastAccuracyCard(data.forecast_accuracy) : ""}
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div class="card hoverable p-5 lg:col-span-2">
           <h2 class="font-semibold text-heading mb-1">Top SKUs by Required Quantity</h2>
-          <p class="text-xs text-body mb-3">Sum of each urgent warehouse's median historical order size</p>
+          <p class="text-xs text-body mb-3">AI forecast of demand over lead time + order cycle, plus 95% safety stock, minus stock on hand</p>
           <div class="h-72"><canvas id="chart-deficit"></canvas></div>
         </div>
         <div class="card hoverable p-5">
@@ -341,14 +357,14 @@ function renderDashboard(data) {
         <div class="flex items-center justify-between px-5 py-4 border-b border-soft">
           <div>
             <h2 class="font-semibold text-heading">Live Alert Table</h2>
-            <p class="text-xs text-body">SKUs with at least one warehouse where Inventory &lt; Reorder Point</p>
+            <p class="text-xs text-body">SKUs with a warehouse below its reorder point — the planner's fixed one, or the higher one the forecast says the coming demand needs</p>
           </div>
           <span class="badge badge-urgent badge-live">${data.alerts.length} active alerts</span>
         </div>
         <div class="overflow-x-auto">
           <table class="table-clean w-full">
             <thead><tr>
-              <th>SKU</th><th>Urgent Warehouses</th><th>Inventory</th><th>Reorder Pt</th><th>Shortfall</th><th>Required Qty</th><th>Candidate Suppliers</th><th></th>
+              <th>SKU</th><th>Urgent Warehouses</th><th>Inventory</th><th>Reorder Pt</th><th>Stock-out Risk</th><th>Required Qty</th><th>Candidate Suppliers</th><th></th>
             </tr></thead>
             <tbody>${data.alerts.map(alertRow).join("")}</tbody>
           </table>
@@ -396,15 +412,31 @@ function kpiCard(label, value, tone, sub) {
     </div>`;
 }
 
+function forecastAccuracyCard(f) {
+  return `
+    <div class="card p-5 flex flex-col md:flex-row md:items-center gap-4">
+      <div class="flex-1">
+        <h2 class="font-semibold text-heading">AI demand forecast ${aiBadge()}</h2>
+        <p class="text-xs text-body mt-1">Learns the yearly sales season and promotion lift from ${fmtNum(f.trained_rows)} real daily sales rows, then decides which SKUs are about to run out and how much to order. Tested honestly: ${esc(f.method)}.</p>
+      </div>
+      <div class="flex gap-6 text-center">
+        <div><div class="text-2xl font-bold text-success tabular">${f.model_error_pct}%</div><div class="text-xs text-muted">forecast error (AI)</div></div>
+        <div><div class="text-2xl font-bold text-muted tabular">${f.previous_method_error_pct}%</div><div class="text-xs text-muted">previous method</div></div>
+        <div><div class="text-2xl font-bold text-heading tabular">−${f.error_reduction_pct}%</div><div class="text-xs text-muted">error cut</div></div>
+      </div>
+    </div>`;
+}
+
 function alertRow(a) {
   return `
     <tr>
       <td class="font-mono text-xs font-semibold text-heading">${esc(a.sku_id)}</td>
       <td class="text-body">${esc(a.urgent_warehouses.join(", "))}</td>
       <td class="tabular">${fmtNum(a.inventory)}</td>
-      <td class="tabular">${fmtNum(a.reorder_point)}</td>
-      <td class="tabular">${fmtNum(a.shortfall)}</td>
-      <td><span class="badge badge-urgent tabular">${fmtNum(a.required_quantity)}</span></td>
+      <td class="tabular">${fmtNum(a.effective_reorder_point)}${a.effective_reorder_point > a.reorder_point
+        ? `<div class="text-[10px] text-muted">planner ${fmtNum(a.reorder_point)} ${aiBadge("Raised by the forecast: coming demand during the lead time needs more stock than the planner's fixed reorder point")}</div>` : ""}</td>
+      <td>${riskBadge(a.stockout_probability)}</td>
+      <td><span class="badge badge-urgent tabular" title="Previous rule (median past order size) would have ordered ${fmtNum(a.required_quantity_baseline)}">${fmtNum(a.required_quantity)}</span></td>
       <td class="tabular">${fmtNum(a.candidate_suppliers)}</td>
       <td><button data-trigger-sku="${esc(a.sku_id)}" class="btn-primary !py-1.5 !px-3 text-xs">Trigger AI Procurement</button></td>
     </tr>`;
@@ -585,7 +617,7 @@ function splitAllocationsTable(lines) {
         <tbody>${lines.map((l) => `
           <tr>
             <td class="font-medium text-heading">${esc(l.supplier_id)}</td>
-            <td class="tabular">${fmtNum(l.quantity)} <span class="text-muted">/ ${fmtNum(l.available_qty)}${simBadge()}</span></td>
+            <td class="tabular">${fmtNum(l.quantity)} <span class="text-muted">/ ${fmtNum(l.available_qty)}${estBadge()}</span></td>
             <td class="tabular">${fmtCurrency(l.unit_cost)}</td>
             <td class="tabular">${fmtCurrency(l.expense)}</td>
             <td>${fmtDate(l.estimated_arrival_date)}</td>
@@ -593,6 +625,14 @@ function splitAllocationsTable(lines) {
           </tr>`).join("")}</tbody>
       </table>
     </div>`;
+}
+
+// Plain-language reason the forecast flagged this SKU and sized the order.
+function forecastWhy(focus) {
+  const lanes = focus.focus_lanes || [];
+  const parts = lanes.map((l) =>
+    `${esc(l.warehouse_id)}: ${fmtNum(l.Inventory)} in stock, the model expects ${fmtNum(Math.round(l.ForecastLeadDemand))} to sell during the ${l.LeadTimeDays}-day lead time (${pct(l.StockoutProbability)} chance of running out first); ordering up to ${fmtNum(Math.round(l.OrderUpTo))} covers lead time + the ${l.OrderCycleDays}-day order cycle with 95% safety stock`);
+  return `Why: ${parts.join("; ")}.`;
 }
 
 function renderPipelineResult(result) {
@@ -612,28 +652,34 @@ function renderPipelineResult(result) {
             <div><div class="text-xs text-muted">Snapshot Date</div><div class="font-medium text-heading">${fmtDate(focus.snapshot_date)}</div></div>
             <div><div class="text-xs text-muted">Urgent Warehouses</div><div class="font-medium text-heading">${urgentWh.length ? esc(urgentWh.join(", ")) : `none of ${focus.lane_count}`}</div></div>
             <div><div class="text-xs text-muted">Inventory (${esc(focus.focus_scope)})</div><div class="font-medium text-heading tabular">${fmtNum(focus.Inventory)}</div></div>
-            <div><div class="text-xs text-muted">Reorder Point</div><div class="font-medium text-heading tabular">${fmtNum(focus.ReorderPoint)}</div></div>
-            <div><div class="text-xs text-muted">Required Quantity</div><div class="font-medium text-danger tabular">${fmtNum(focus.RequiredQuantity)}</div></div>
+            <div><div class="text-xs text-muted">Reorder Point (planner → with forecast)</div><div class="font-medium text-heading tabular">${fmtNum(focus.ReorderPoint)}${focus.EffectiveReorderPoint > focus.ReorderPoint ? ` → ${fmtNum(focus.EffectiveReorderPoint)}${aiBadge()}` : ""}</div></div>
+            <div><div class="text-xs text-muted">Forecast Demand ${aiBadge()}</div><div class="font-medium text-heading tabular">${focus.DailyDemand} units/day <span class="text-xs text-muted">(last-28-day avg ${focus.TrailingDailyDemand})</span></div></div>
+            <div><div class="text-xs text-muted">Stock-out Risk Before Delivery ${aiBadge()}</div><div>${riskBadge(focus.StockoutProbability)}</div></div>
+            <div><div class="text-xs text-muted">Required Quantity ${aiBadge()}</div><div class="font-medium text-danger tabular" title="${esc(focus.required_quantity_rule || "")}">${fmtNum(focus.RequiredQuantity)}${focus.required_quantity_baseline ? ` <span class="text-xs text-muted">(old rule: ${fmtNum(focus.required_quantity_baseline)})</span>` : ""}</div></div>
             <div><div class="text-xs text-muted">Status</div><div>${focus.Urgent ? '<span class="badge badge-urgent badge-live">Urgent Procurement</span>' : '<span class="badge badge-standard">Monitoring</span>'}</div></div>
-          </div>` : `<p class="text-sm text-muted">No focus SKU.</p>`}
+          </div>
+          ${focus.Urgent ? `<p class="text-xs text-body mt-3">${forecastWhy(focus)}</p>` : ""}` : `<p class="text-sm text-muted">No focus SKU.</p>`}
 
-        <h3 class="font-semibold text-heading mt-5 mb-2 text-sm">${plan?.split_order ? "Split Order" : "Recommended Supplier"}</h3>
+        <h3 class="font-semibold text-heading mt-5 mb-2 text-sm">${plan?.partial_order ? "Partial Split Order" : plan?.split_order ? "Split Order" : "Recommended Supplier"}</h3>
         ${plan?.split_order ? `
           <div class="border border-soft rounded-lg p-3 text-sm">
             <div class="font-medium text-heading">Order split across ${plan.allocations.length} suppliers</div>
-            <div class="text-xs text-body mt-1">No single supplier can supply ${fmtNum(sup.required_quantity)} units alone (combined availability ${fmtNum(sup.combined_available_qty)}${simBadge()}). The order is filled from the best-ranked suppliers in turn; High Risk suppliers are used only where the others cannot cover it.</div>
+            <div class="text-xs text-body mt-1">${plan.partial_order
+              ? `Even all ${sup.pool_size} suppliers together can supply only ${fmtNum(sup.combined_available_qty)}${estBadge()} of the ${fmtNum(plan.required_quantity)} units needed, so every supplier is ordered to its capacity.`
+              : `No single supplier can supply ${fmtNum(sup.required_quantity)} units alone, but together they can (combined capacity ${fmtNum(sup.combined_available_qty)}${estBadge()}). The order uses the fewest suppliers that cover it — never a High Risk one if safe ones are enough — filled best-ranked first.`}</div>
+            ${plan.partial_order ? `<div class="mt-2 text-xs font-medium text-danger">Shortfall: ${fmtNum(plan.shortfall_qty)} units still need a new supplier or a follow-up order.</div>` : ""}
             ${splitAllocationsTable(plan.allocations)}
           </div>` : rec ? `
           <div class="border border-soft rounded-lg p-3 text-sm flex items-center justify-between">
             <div>
               <div class="font-medium text-heading">${esc(rec.supplier_id)}</div>
-              <div class="text-xs text-body">${fmtCurrency(rec.unit_cost)}/unit · ${rec.lead_time_days}d lead · ${fmtNum(rec.available_qty)} available${simBadge()} · Score ${rec.heuristic_score?.toFixed?.(1) ?? rec.heuristic_score}</div>
+              <div class="text-xs text-body">${fmtCurrency(rec.unit_cost)}/unit · ${rec.lead_time_days}d lead · ${fmtNum(rec.available_qty)} available${estBadge()} · Score ${rec.heuristic_score?.toFixed?.(1) ?? rec.heuristic_score}</div>
             </div>
             <span class="badge ${statusBadgeClass(rec.supplier_status)}">${esc(rec.supplier_status)}</span>
           </div>` : sup.no_eligible_supplier ? `
           <div class="border border-soft rounded-lg p-3 text-sm">
             <div class="font-medium text-danger">No supplier selected</div>
-            <div class="text-xs text-body mt-1">None of the ${sup.pool_size} candidates can supply ${fmtNum(sup.required_quantity)} units alone (combined availability ${fmtNum(sup.combined_available_qty)}${simBadge()}). Even a split order across suppliers could not cover it.</div>
+            <div class="text-xs text-body mt-1">None of the ${sup.pool_size} candidates has any known capacity for this SKU, so not even a partial order can be planned.</div>
           </div>` : `<p class="text-sm text-muted">No eligible supplier.</p>`}
 
         ${plan && plan.error ? `<p class="text-sm text-body mt-4">${esc(plan.error)}</p>` : ""}
@@ -890,6 +936,7 @@ function xaiBuildReasonText(supplierBlock, finalStatus, highRisk) {
   if (finalStatus === "Preferred") parts.push("Lead time and defect rate both cleared the Preferred bar.");
   else if (finalStatus === "Reliable") parts.push("Fulfillment rate cleared the required threshold with no prior status.");
   else if (finalStatus === "Standard" && !highRisk) parts.push("The supplier did not satisfy the Preferred or Reliable conditions.");
+  else if (finalStatus === "Unrated") parts.push("No purchase records of its own yet, so its quality is the industry baseline and no quality label (Preferred / High Risk / Reliable) is claimed; it was ranked on real cost, lead time and capacity.");
   return parts.join(" ");
 }
 
@@ -1225,7 +1272,7 @@ function renderSuppliersView(data) {
         <div>
           <h1 class="page-title">Heuristic Supplier Decision Matrix — ${esc(data.sku_id)}</h1>
           <p class="text-sm text-body mt-1">H = ${pct("quality")}%·Quality + ${pct("cost")}%·Cost + ${pct("fulfillment")}%·Fulfillment + ${pct("delivery")}%·Delivery — Cost and Delivery are Min-Max normalized across eligible suppliers; Quality (1 − defect rate) and Fulfillment are used as absolute rates</p>
-          <p class="text-xs text-muted mt-1">Only suppliers that actually supply this SKU in the supply-chain data are candidates. ${simBadge()} = simulated field (supplier availability and quality are not in the source data).</p>
+          <p class="text-xs text-muted mt-1">Only suppliers that actually supply this SKU in the supply-chain data are candidates. ${estBadge()} = estimated from real history: capacity is the largest order the supplier has actually delivered for this SKU; defect and fulfillment rates are the real industry baseline from the procurement KPI file until a supplier has records of its own (then it is "Unrated" no longer). Cost and lead time are real.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <select id="matrix-sku" class="input-field min-w-[220px]">${skuOptionsHtml(data.sku_id)}</select>
@@ -1252,7 +1299,7 @@ function renderSuppliersView(data) {
           <table class="table-clean w-full">
             <thead><tr>
               <th>Rank</th><th>Supplier</th><th>Unit Cost</th><th>Lead Time (d)</th>
-              <th>Available${simBadge()}</th><th>Defect Rate${simBadge()}</th><th>Fulfillment${simBadge()}</th><th>Heuristic Score</th>
+              <th>Available${estBadge()}</th><th>Defect Rate${estBadge()}</th><th>Fulfillment${estBadge()}</th><th>Heuristic Score</th>
             </tr></thead>
             <tbody>${rows.map(supplierRow).join("")}</tbody>
           </table>
@@ -1260,7 +1307,7 @@ function renderSuppliersView(data) {
       </div>` : `
       <div class="card p-6 text-sm">
         <div class="font-semibold text-danger">No eligible supplier for ${fmtNum(data.required_quantity)} units</div>
-        <p class="text-body mt-1">Combined availability across all ${data.pool_size} candidates is ${fmtNum(data.combined_available_qty)} units${simBadge()}. ${data.split_order_possible ? "No single supplier can cover it, but the order can be split across suppliers — run the Agent Pipeline for this SKU to see the split plan." : "Even a split order could not cover it. No supplier is ranked or recommended."}</p>
+        <p class="text-body mt-1">Combined availability across all ${data.pool_size} candidates is ${fmtNum(data.combined_available_qty)} units${estBadge()}. ${data.split_order_possible ? "No single supplier can cover it, but together they can — run the Agent Pipeline for this SKU to see the split plan." : data.partial_order_possible ? `Even all suppliers together fall ${fmtNum(data.shortfall_qty)} units short — the Agent Pipeline plans a partial order from all of them and reports the shortfall.` : "No supplier has any known capacity for this SKU."}</p>
       </div>`}
 
       ${data.ineligible_suppliers.length ? `
@@ -1271,7 +1318,7 @@ function renderSuppliersView(data) {
         </div>
         <div class="overflow-x-auto">
           <table class="table-clean w-full">
-            <thead><tr><th>Supplier</th><th>Available${simBadge()}</th><th>Shortfall</th><th>Unit Cost</th><th>Lead Time (d)</th><th>Warehouses</th></tr></thead>
+            <thead><tr><th>Supplier</th><th>Available${estBadge()}</th><th>Shortfall</th><th>Unit Cost</th><th>Lead Time (d)</th><th>Warehouses</th></tr></thead>
             <tbody>${data.ineligible_suppliers.map((s) => `
               <tr>
                 <td class="font-medium text-heading">${esc(s.supplier_id)}</td>
@@ -1508,10 +1555,11 @@ async function loadActionView() {
             <div class="text-lg font-bold text-heading">${esc(focus.SKU)} → ${plan.split_order ? plan.allocations.map((l) => esc(l.supplier_id)).join(" + ") : esc(plan.primary_supplier_id)}</div>
           </div>
           ${plan.split_order
-            ? `<span class="badge badge-standard">Split order · ${plan.allocations.length} suppliers</span>`
+            ? `<span class="badge ${plan.partial_order ? "badge-urgent" : "badge-standard"}">${plan.partial_order ? "Partial" : "Split"} order · ${plan.allocations.length} suppliers</span>`
             : `<span class="badge ${statusBadgeClass(rec?.supplier_status)}">${esc(rec?.supplier_status || "N/A")}</span>`}
         </div>
 
+        ${plan.partial_order ? `<div class="mb-4 border border-soft rounded-lg p-3 text-sm"><span class="font-medium text-danger">Partial order:</span> all suppliers together can supply ${fmtNum(plan.order_quantity)} of the ${fmtNum(plan.required_quantity)} units needed. ${fmtNum(plan.shortfall_qty)} units still need a new supplier or a follow-up order.</div>` : ""}
         ${plan.split_order ? `<div class="mb-6">${splitAllocationsTable(plan.allocations)}</div>` : ""}
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

@@ -2,14 +2,15 @@
 Supplier Intelligence Agent — eligibility filter + heuristic ranking for one SKU.
 
 Candidates are the suppliers that actually serve the SKU in the supply-chain
-data (`sku_supplier_lanes`, REAL), joined to `supplier_sku_profile` (SIMULATED
-today, ERP-fed later). The raw criteria per candidate form the candidate matrix:
+data (`sku_supplier_lanes`, REAL), joined to `supplier_sku_profile` (ESTIMATED
+from real history by backend/ml/supplier_estimator.py — no random values). The
+raw criteria per candidate form the candidate matrix:
 
-  unit_cost        REAL   mean of the supplier's lane costs for this SKU
-  lead_time_days   REAL   mean of the supplier's lane lead times for this SKU
-  available_qty    SIMULATED
-  defect_rate      SIMULATED (supplier-level)
-  fulfillment_rate SIMULATED (supplier-level)
+  unit_cost        REAL       mean of the supplier's lane costs for this SKU
+  lead_time_days   REAL       mean of the supplier's lane lead times for this SKU
+  available_qty    ESTIMATED  demonstrated capacity: largest order delivered for this SKU
+  defect_rate      ESTIMATED  empirical-Bayes: real KPI prior, moved by supplier evidence
+  fulfillment_rate ESTIMATED  Beta-Binomial: real KPI prior, moved by supplier evidence
 
 A supplier serves an SKU at 1–3 warehouses; when it serves several, cost and
 lead time differ per warehouse and procurement requests have no warehouse, so
@@ -29,8 +30,10 @@ Heuristic Rank Score over the eligible pool (0 = worst, 1 = best per component):
   FinalScore = MinMax(RawScore) * 100                                 -> 0..100
 
 Bounded rates are used absolutely — the precedent set by the former Rating/5
-term — because Min-Max would stretch small differences into 0..1; for
-fulfillment those differences are sampling noise by construction.
+term — because Min-Max would stretch small differences into 0..1. A supplier
+with no evidence of its own sits exactly on the prior, so quality and
+fulfilment then add the same amount to every candidate and the ranking is
+decided by the real cost and lead-time differences.
 
 FinalScore is a *relative ranking* score. Risk is the Knowledge Agent's job,
 which reads the ABSOLUTE attribute values carried alongside these scores.
@@ -113,7 +116,9 @@ def candidate_matrix(conn: sqlite3.Connection, sku_id: str) -> pd.DataFrame:
         warehouses=("warehouse_id", lambda s: ", ".join(sorted(s))),
     ).reset_index()
     profile = pd.read_sql_query(
-        "SELECT supplier_id, available_qty, defect_rate, fulfillment_rate FROM supplier_sku_profile WHERE sku_id = ?",
+        """SELECT supplier_id, available_qty, defect_rate, fulfillment_rate, defect_sd,
+                  evidence_pos, capacity_orders, evidence_source
+           FROM supplier_sku_profile WHERE sku_id = ?""",
         conn, params=(sku_id,),
     )
     matrix = per_supplier.merge(profile, on="supplier_id", how="left")
@@ -223,13 +228,16 @@ def rank_suppliers(
     combined = int(scorable["available_qty"].sum()) if not scorable.empty else 0
     no_eligible = bool(len(scorable)) and eligible.empty and required_quantity > 0
     split_possible = no_eligible and combined >= required_quantity
+    # Even the whole pool together falls short: still plan what CAN be bought
+    # (a partial order) instead of giving up, and report the shortfall.
+    partial_possible = no_eligible and 0 < combined < required_quantity
 
-    # When no single supplier can cover the request but the pool together can, the
-    # whole scorable pool is ranked (scores relative to that pool) so the Knowledge
-    # Agent can allocate the order across suppliers. `ranked_candidates` stays empty:
-    # nobody is recommended as a *sole* supplier.
+    # When no single supplier can cover the request, the whole scorable pool is
+    # ranked (scores relative to that pool) so the Knowledge Agent can allocate
+    # the order across suppliers. `ranked_candidates` stays empty: nobody is
+    # recommended as a *sole* supplier.
     split_candidates: list[dict] = []
-    if split_possible:
+    if split_possible or partial_possible:
         pool_scored = score_candidates(scorable, weights).sort_values("raw_score", ascending=False).reset_index(drop=True)
         pool_scored["rank"] = pool_scored.index + 1
         split_candidates = _candidate_records(pool_scored, weights)
@@ -248,6 +256,9 @@ def rank_suppliers(
         # True when no single supplier can cover the request but the pool combined can.
         # The Knowledge Agent then allocates the order across `split_candidates`.
         "split_order_possible": split_possible,
+        # True when even the combined pool cannot cover it; a partial split is planned.
+        "partial_order_possible": partial_possible,
+        "shortfall_qty": int(max(0, required_quantity - combined)) if partial_possible else 0,
         "split_candidates": split_candidates,
         "ranked_candidates": candidates,
         "primary_supplier": candidates[0] if candidates else None,

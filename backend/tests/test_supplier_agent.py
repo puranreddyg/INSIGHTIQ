@@ -20,12 +20,14 @@ from backend.config import HEURISTIC_WEIGHTS
 SKU = "SKU_T"
 
 
-def supplier(sid, *, cost=10.0, lead=5.0, defect=0.01, fulfillment=0.80, avail=1_000, lanes=None):
-    """One candidate. `lanes` = [(warehouse, cost, lead), ...] overrides a single lane."""
+def supplier(sid, *, cost=10.0, lead=5.0, defect=0.01, fulfillment=0.80, avail=1_000, lanes=None, evidence=20):
+    """One candidate. `lanes` = [(warehouse, cost, lead), ...] overrides a single lane.
+    `evidence` = purchase orders of the supplier's own history (rules need >= 5)."""
     lanes = lanes or [("WH_1", cost, lead)]
     return {
         "lanes": [{"sku_id": SKU, "warehouse_id": wh, "supplier_id": sid, "unit_cost": c, "lead_time_days": lt} for wh, c, lt in lanes],
-        "profile": {"sku_id": SKU, "supplier_id": sid, "available_qty": avail, "defect_rate": defect, "fulfillment_rate": fulfillment},
+        "profile": {"sku_id": SKU, "supplier_id": sid, "available_qty": avail, "defect_rate": defect, "fulfillment_rate": fulfillment,
+                    "defect_sd": 0.01, "evidence_pos": evidence, "capacity_orders": 20, "evidence_source": "test"},
     }
 
 
@@ -211,7 +213,7 @@ def test_no_eligible_supplier_is_never_named_a_sole_supplier_but_the_order_is_sp
     assert knowledge["ineligible_candidates"] == []
 
 
-def test_split_order_not_possible_when_combined_availability_is_short():
+def test_full_split_not_possible_when_combined_availability_is_short():
     result = rank([supplier("A", avail=100), supplier("B", avail=100)], required=500)
     assert result["no_eligible_supplier"] is True and result["split_order_possible"] is False
 
@@ -321,7 +323,21 @@ def test_full_matrix_and_required_path_expose_identical_scoring_keys():
         assert set(c["scoring"]) == {"weights", "components", "contributions", "raw_score", "final_score"}
 
 
-def test_simulated_fields_are_labelled_in_the_response():
+def test_estimated_fields_are_labelled_in_the_response():
     prov = rank(SPREAD)["field_provenance"]
-    assert prov["available_qty"] == prov["defect_rate"] == prov["fulfillment_rate"] == "SIMULATED"
+    assert prov["available_qty"] == prov["defect_rate"] == prov["fulfillment_rate"] == "ESTIMATED"
     assert prov["unit_cost"] == prov["lead_time_days"] == "REAL"
+
+
+def test_a_supplier_without_its_own_evidence_is_never_labelled_high_risk():
+    """Quality rules fire on a supplier's own history only, never on the prior alone."""
+    knowledge = knowledge_agent.run({"focus_facts": []}, rank([supplier("NEW", defect=0.09, evidence=0)]))
+    assert knowledge["annotated_candidates"][0]["supplier_status"] == "Unrated"
+
+
+def test_partial_order_when_even_the_whole_pool_is_short():
+    result = rank([supplier("A", avail=100), supplier("B", avail=150)], required=500)
+    assert result["partial_order_possible"] is True and result["shortfall_qty"] == 250
+    knowledge = knowledge_agent.run({"focus_facts": []}, result)
+    assert knowledge["partial_order"] is True and knowledge["shortfall_qty"] == 250
+    assert sorted(a["allocated_qty"] for a in knowledge["allocations"]) == [100, 150]

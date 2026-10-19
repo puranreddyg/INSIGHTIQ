@@ -1,3 +1,5 @@
+> **Outdated.** This describes an older version of the pipeline. The current design, including the AI demand forecast and multi-supplier orders, is in [docs/PREDICTIVE_MODEL.md](docs/PREDICTIVE_MODEL.md).
+
 # InsightIQ Agent Pipeline & Heuristic Search Explanation
 
 This document explains the four-stage AI agent pipeline in InsightIQ, detailing the mathematical formulas and logical rules used at each step—especially the heuristic search and forward chaining trace.

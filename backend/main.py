@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from backend import config
 from backend.agents import coordinator_agent, perception_agent, supplier_agent
 from backend.database import TABLES_TO_BUILD, build_database, connect
+from backend.ml.store import load_demand_model, load_supplier_meta
 
 APP_STARTED_AT = datetime.now()
 
@@ -89,8 +90,13 @@ def _sku_summary(r: dict, candidate_counts: dict[str, int]) -> dict:
         "lane_count": r["lane_count"],
         "inventory": r["Inventory"],
         "reorder_point": r["ReorderPoint"],
+        "effective_reorder_point": r["EffectiveReorderPoint"],
+        "stockout_probability": r["StockoutProbability"],
+        "forecast_daily_demand": r["DailyDemand"],
+        "urgent_reasons": sorted({lane["UrgentReason"] for lane in r["lanes"] if lane["UrgentReason"]}),
         "shortfall": r["Shortfall"],
         "required_quantity": r["RequiredQuantity"],
+        "required_quantity_baseline": r["required_quantity_baseline"],
         "candidate_suppliers": candidate_counts.get(r["sku_id"], 0),
     }
 
@@ -98,6 +104,23 @@ def _sku_summary(r: dict, candidate_counts: dict[str, int]) -> dict:
 def _candidate_counts(conn) -> dict[str, int]:
     rows = conn.execute("SELECT sku_id, COUNT(DISTINCT supplier_id) FROM sku_supplier_lanes GROUP BY sku_id").fetchall()
     return {sku: n for sku, n in rows}
+
+
+def _forecast_accuracy(model) -> dict | None:
+    """Headline backtest: train on the past only, forecast the next 14 days (WAPE, lower is better)."""
+    bt = model.metrics or {}
+    test = bt.get("strict_h14")
+    if not bt.get("available") or not test:
+        return None
+    model_err, base_err = test[f"model_k{bt['selected_k']}"], test["baseline_trailing_28d"]
+    return {
+        "horizon_days": 14,
+        "model_error_pct": round(model_err * 100, 1),
+        "previous_method_error_pct": round(base_err * 100, 1),
+        "error_reduction_pct": round((1 - model_err / base_err) * 100, 0),
+        "trained_rows": model.n_rows,
+        "method": "train on the past only, forecast the next 14 days, repeated weekly through Q4",
+    }
 
 
 @app.get("/api/dashboard")
@@ -111,6 +134,7 @@ def dashboard():
             "SELECT AVG(fulfillment_rate) FROM (SELECT DISTINCT supplier_id, fulfillment_rate FROM supplier_sku_profile)"
         ).fetchone()[0]
         as_of = perception_agent.snapshot_date(conn)[:10]
+        model = load_demand_model(conn)
 
     urgent = perception_agent.urgent_requests(requests)
     kpis = {
@@ -122,8 +146,10 @@ def dashboard():
     return {
         "snapshot_date": as_of,
         "kpis": kpis,
-        "kpi_provenance": {"avg_supplier_lead_time_days": "REAL", "avg_supplier_fulfillment_rate": "SIMULATED"},
+        "kpi_provenance": {"avg_supplier_lead_time_days": "REAL", "avg_supplier_fulfillment_rate": "ESTIMATED",
+                           "critical_low_stock_skus": "MODEL"},
         "alerts": [_sku_summary(r, counts) for r in urgent],
+        "forecast_accuracy": _forecast_accuracy(model),
         "recent_purchase_orders": active_pos.head(10).to_dict(orient="records") if not active_pos.empty else [],
         "generated_at": datetime.now().isoformat(),
     }
@@ -141,6 +167,28 @@ def list_skus(q: Optional[str] = None, urgent_only: bool = False):
     if q:
         rows = [r for r in rows if q.lower() in r["sku_id"].lower()]
     return {"snapshot_date": as_of, "skus": rows}
+
+
+@app.get("/api/model")
+def model_card():
+    """What the predictive layer learned and how well it forecasts (for the UI's model panel)."""
+    with connect() as conn:
+        model = load_demand_model(conn)
+        supplier_meta = load_supplier_meta(conn)
+    return {
+        "demand_forecaster": {
+            "type": f"Seasonal regression: yearly Fourier terms (K={model.k}) + promotion lift that varies with the season",
+            "trained_on": {"rows": model.n_rows, "lanes": model.n_lanes, "from": model.trained_from, "to": model.trained_through},
+            "r2_in_sample": round(model.r2, 3),
+            "daily_noise_sd": round(model.sigma_daily, 2),
+            "backtest": model.metrics,
+            "not_used": "The source column Demand_Forecast is derived from same-day sales (corr 0.95 vs 0.61 with next day), "
+                        "so it is not a real forecast and is not used as an input.",
+        },
+        "supplier_estimator": supplier_meta,
+        "field_provenance": config.FIELD_PROVENANCE,
+        "service_level_z": config.SERVICE_LEVEL_Z,
+    }
 
 
 @app.get("/api/products")

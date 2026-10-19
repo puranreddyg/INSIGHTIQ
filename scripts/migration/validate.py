@@ -1,5 +1,9 @@
 """Post-migration validation. Writes docs/migration/validation_results.json.
 
+HISTORICAL: this validates the 2026-09-27 SKU migration, which used the simulated
+supplier profile (backend/simulation, removed on 2026-10-19 when the predictive
+layer in backend/ml replaced it). To re-run it, check out commit e74f7a3.
+
     python scripts/migration/validate.py
 
 Every number in the migration report comes from this file or the state

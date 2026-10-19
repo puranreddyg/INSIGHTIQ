@@ -32,9 +32,12 @@ def run_pipeline(conn: sqlite3.Connection, sku_id: Optional[str] = None) -> dict
 
     t0 = time.perf_counter()
     perception_result = perception_agent.run(conn, sku_id=sku_id)
+    focus_preview = perception_result["focus_facts"][0] if perception_result["focus_facts"] else None
     _log("Perception Agent", "completed", t0, {
-        "summary": f"Scanned supply-chain ledger ({perception_result['snapshot_date']}) — "
-                   f"{perception_result['urgent_sku_count']} urgent SKU(s) detected.",
+        "summary": f"Scanned supply-chain ledger ({perception_result['snapshot_date']}) and forecast demand — "
+                   f"{perception_result['urgent_sku_count']} urgent SKU(s) detected"
+                   + (f"; {focus_preview['sku_id']} needs {focus_preview['RequiredQuantity']} units "
+                      f"(stock-out risk {focus_preview['StockoutProbability']:.0%})." if focus_preview else "."),
     })
 
     focus = perception_result["focus_facts"][0] if perception_result["focus_facts"] else None
@@ -43,7 +46,13 @@ def run_pipeline(conn: sqlite3.Connection, sku_id: Optional[str] = None) -> dict
 
     t1 = time.perf_counter()
     supplier_result = supplier_agent.run(conn, sku_id=focus_sku, required_quantity=required)
-    if supplier_result.get("split_order_possible"):
+    if supplier_result.get("partial_order_possible"):
+        supplier_summary = (
+            f"Even all suppliers together ({supplier_result['combined_available_qty']} units) cannot cover {required}; "
+            f"ranked {len(supplier_result['split_candidates'])} suppliers for a partial order "
+            f"(shortfall {supplier_result['shortfall_qty']})."
+        )
+    elif supplier_result.get("split_order_possible"):
         supplier_summary = (
             f"No single supplier can supply {required} units; combined stock of "
             f"{supplier_result['combined_available_qty']} can — ranked {len(supplier_result['split_candidates'])} "
@@ -60,7 +69,8 @@ def run_pipeline(conn: sqlite3.Connection, sku_id: Optional[str] = None) -> dict
     knowledge_result = knowledge_agent.run(perception_result, supplier_result)
     _log("Knowledge Agent", "completed", t2, {
         "summary": f"Forward-chained {len(knowledge_result['reasoning_trace'])} inference steps; " + (
-            f"split the order across {len(knowledge_result['allocations'])} suppliers."
+            f"split the order across {len(knowledge_result['allocations'])} suppliers"
+            + (f" (partial — shortfall {knowledge_result['shortfall_qty']})." if knowledge_result.get("partial_order") else ".")
             if knowledge_result.get("split_order")
             else f"recommended {knowledge_result['recommended_supplier']['supplier_id'] if knowledge_result['recommended_supplier'] else 'N/A'}."
         ),

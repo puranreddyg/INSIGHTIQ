@@ -5,6 +5,7 @@ the real CSVs in a temporary directory (the working database is never touched).
 from __future__ import annotations
 
 import hashlib
+import math
 import sqlite3
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from backend import config, database
 from backend.agents import coordinator_agent, knowledge_agent, perception_agent, supplier_agent
+from backend.ml import demand_forecaster, supplier_estimator
 
 AGENT_DIR = Path(__file__).resolve().parents[1] / "agents"
 
@@ -111,36 +113,51 @@ def test_products_table_has_no_procurement_columns(conn):
     assert conn.execute("SELECT COUNT(*) FROM products").fetchone()[0] == 1000
 
 
-def test_loader_rejects_an_invented_relationship(tmp_path, monkeypatch):
-    bad = pd.read_csv(config.CSV_PATHS["supplier_sku_profile"])
+def test_loader_rejects_an_invented_relationship():
+    sc = database._load_supply_chain()
+    profile, _ = supplier_estimator.build_profile(sc, database._load_procurement_kpi())
+    bad = profile.copy()
     bad.loc[0, "supplier_id"] = "SUP_1"  # SKU_1 is never supplied by SUP_1
     assert "SUP_1" not in set(bad[bad.sku_id == "SKU_1"].supplier_id.iloc[1:])
-    path = tmp_path / "profile.csv"
-    bad.to_csv(path, index=False)
-    monkeypatch.setitem(config.CSV_PATHS, "supplier_sku_profile", path)
-    sc = database._load_supply_chain()
     with pytest.raises(ValueError, match="absent from supply_chain"):
-        database._load_supplier_sku_profile(sc)
+        database._validate_supplier_profile(bad, sc)
 
 
 # ---------------------------------------------------------------------------
 # Procurement flow
 # ---------------------------------------------------------------------------
 
+PLANNER_URGENT_SKUS = {"SKU_2", "SKU_5", "SKU_19", "SKU_21", "SKU_37", "SKU_39", "SKU_41", "SKU_42", "SKU_44", "SKU_47", "SKU_50"}
+
+
 def test_perception_detects_urgent_skus_from_the_latest_date(conn, urgent):
     assert perception_agent.snapshot_date(conn).startswith("2024-12-30")
-    assert len(urgent) == 11
+    ids = {r["sku_id"] for r in urgent}
+    # every SKU below the planner's static reorder point is still urgent; the forecast
+    # only ever ADDS SKUs whose coming demand the static point under-covers (SKU_27)
+    assert PLANNER_URGENT_SKUS <= ids and ids - PLANNER_URGENT_SKUS == {"SKU_27"}
     for r in urgent:
         assert r["RequiredQuantity"] > 0 and r["RequiredQuantity"] % config.ORDER_QUANTITY_ROUNDING == 0
-        assert all(l["Inventory"] < l["ReorderPoint"] for l in r["focus_lanes"])
+        for lane in r["focus_lanes"]:
+            assert lane["Inventory"] < lane["EffectiveReorderPoint"]
+            assert lane["EffectiveReorderPoint"] == max(lane["ReorderPoint"], lane["ForecastReorderPoint"])
+            assert 0.0 <= lane["StockoutProbability"] <= 1.0
 
 
-def test_required_quantity_is_sum_of_urgent_lane_median_lot_sizes(conn, urgent):
+def test_required_quantity_is_the_forecast_order_up_to_gap(conn, urgent):
+    for r in urgent:
+        raw_need = sum(max(0.0, l["OrderUpTo"] - l["Inventory"]) for l in r["focus_lanes"])
+        assert r["required_quantity_raw"] == pytest.approx(raw_need, abs=0.2)
+        assert r["RequiredQuantity"] - config.ORDER_QUANTITY_ROUNDING < r["required_quantity_raw"] <= r["RequiredQuantity"]
+
+
+def test_previous_lot_size_rule_is_kept_for_comparison(conn, urgent):
     raw = pd.read_csv(config.CSV_PATHS["supply_chain"])
     medians = raw[raw.Order_Quantity > 0].groupby(["SKU_ID", "Warehouse_ID"]).Order_Quantity.median()
     for r in urgent:
-        raw_need = sum(medians[(r["sku_id"], l["warehouse_id"])] for l in r["focus_lanes"])
-        assert r["required_quantity_raw"] == pytest.approx(raw_need)
+        baseline = sum(medians[(r["sku_id"], l["warehouse_id"])] for l in r["focus_lanes"])
+        step = config.ORDER_QUANTITY_ROUNDING
+        assert r["required_quantity_baseline"] == math.ceil(baseline / step) * step
 
 
 def test_warehouse_detail_is_preserved_in_the_request(urgent):
@@ -185,15 +202,34 @@ def _blocked(conn, urgent):
     return [r for r in urgent if not supplier_agent.rank_suppliers(conn, r["sku_id"], r["RequiredQuantity"])["eligible_count"]]
 
 
-def test_no_supplier_is_selected_when_even_the_combined_stock_is_short(conn):
+def test_partial_order_is_planned_when_even_the_combined_capacity_is_short(conn):
+    """Not 'unprocessable': every supplier is used to its capacity and the gap is reported."""
+    from backend.agents import planning_agent
     focus = perception_agent.observe_sku(conn, "SKU_44")
     impossible = 10**6
     sup = supplier_agent.rank_suppliers(conn, "SKU_44", impossible)
-    assert sup["no_eligible_supplier"] and not sup["split_order_possible"] and sup["split_candidates"] == []
+    combined = sup["combined_available_qty"]
+    assert sup["no_eligible_supplier"] and sup["partial_order_possible"] and not sup["split_order_possible"]
+    assert sup["shortfall_qty"] == impossible - combined
     know = knowledge_agent.run({"focus_facts": [focus]}, sup)
-    assert know["recommended_supplier"] is None and know["split_order"] is False and know["allocations"] == []
-    from backend.agents import planning_agent
+    assert know["split_order"] and know["partial_order"] and know["shortfall_qty"] == impossible - combined
+    assert {a["supplier_id"]: a["allocated_qty"] for a in know["allocations"]} == \
+        {c["supplier_id"]: c["available_qty"] for c in sup["split_candidates"]}
     plan = planning_agent.run(conn, focus, know, impossible, sup)
+    assert plan["status"] == "planned" and plan["partial_order"] is True
+    assert plan["order_quantity"] == combined and plan["shortfall_qty"] == impossible - combined
+
+
+def test_nothing_is_planned_only_when_no_supplier_has_any_capacity(conn):
+    from backend.agents import planning_agent
+    focus = perception_agent.observe_sku(conn, "SKU_44")
+    pool = [{**c, "available_qty": None} for c in supplier_agent.full_matrix(conn, "SKU_44")["ranked_candidates"]]
+    sup = {"required_quantity": 500, "ranked_candidates": [], "split_candidates": [], "split_order_possible": False,
+           "partial_order_possible": False, "no_eligible_supplier": True, "combined_available_qty": 0,
+           "ineligible_suppliers": pool}
+    know = knowledge_agent.run({"focus_facts": [focus]}, sup)
+    assert know["recommended_supplier"] is None and know["allocations"] == []
+    plan = planning_agent.run(conn, focus, know, 500, sup)
     assert plan["status"] == "no_eligible_supplier" and "order_quantity" not in plan
 
 
@@ -231,16 +267,32 @@ def test_split_uses_high_risk_suppliers_only_when_the_safe_ones_cannot_cover_it(
 
 def test_split_allocation_unit_behaviour():
     cands = [
-        _candidate(supplier_id="A", available_qty=300, defect_rate=0.02),   # safe, rank 1
-        _candidate(supplier_id="B", available_qty=450, defect_rate=0.10),   # High Risk, rank 2
-        _candidate(supplier_id="C", available_qty=200, defect_rate=0.03),   # safe, rank 3
+        _candidate(supplier_id="A", rank=1, available_qty=300, defect_rate=0.02),   # safe
+        _candidate(supplier_id="B", rank=2, available_qty=450, defect_rate=0.10),   # High Risk
+        _candidate(supplier_id="C", rank=3, available_qty=200, defect_rate=0.03),   # safe
     ]
-    allocs, spare = knowledge_agent.allocate_split_order(cands, 700, [])
-    assert [(a["supplier_id"], a["allocated_qty"]) for a in allocs] == [("A", 300), ("C", 200), ("B", 200)]
-    assert spare == []
-    allocs, spare = knowledge_agent.allocate_split_order(cands, 450, [])   # safe suppliers suffice -> B unused
+    # safe suppliers can cover 450 together -> the High Risk one is not used even though it alone could
+    allocs, spare, short = knowledge_agent.allocate_split_order(cands, 450, [])
     assert [(a["supplier_id"], a["allocated_qty"]) for a in allocs] == [("A", 300), ("C", 150)]
-    assert [s["supplier_id"] for s in spare] == ["B"] and spare[0]["supplier_status"] == "High Risk"
+    assert [s["supplier_id"] for s in spare] == ["B"] and spare[0]["supplier_status"] == "High Risk" and short == 0
+    # 700 needs B; the smallest set containing it is A + B, filled in rank order
+    allocs, spare, short = knowledge_agent.allocate_split_order(cands, 700, [])
+    assert [(a["supplier_id"], a["allocated_qty"]) for a in allocs] == [("A", 300), ("B", 400)] and short == 0
+    assert [s["supplier_id"] for s in spare] == ["C"]
+    # 1000 exceeds everyone together (950) -> partial order using every supplier, shortfall 50
+    allocs, spare, short = knowledge_agent.allocate_split_order(cands, 1000, [])
+    assert sum(a["allocated_qty"] for a in allocs) == 950 and short == 50 and spare == []
+
+
+def test_split_prefers_fewer_suppliers_over_more():
+    cands = [
+        _candidate(supplier_id="A", rank=1, available_qty=250),
+        _candidate(supplier_id="B", rank=2, available_qty=250),
+        _candidate(supplier_id="C", rank=3, available_qty=480),
+        _candidate(supplier_id="D", rank=4, available_qty=100),
+    ]
+    allocs, _, _ = knowledge_agent.allocate_split_order(cands, 560, [])
+    assert [(a["supplier_id"], a["allocated_qty"]) for a in allocs] == [("A", 250), ("C", 310)]
 
 
 def test_non_urgent_sku_produces_no_purchase_order(conn):
@@ -264,7 +316,7 @@ def test_planned_order_never_exceeds_the_primary_suppliers_availability(conn, ur
 
 def _candidate(**kw):
     base = {"supplier_id": "S", "unit_cost": 10.0, "lead_time_days": 5.0, "available_qty": 400,
-            "defect_rate": 0.02, "fulfillment_rate": 0.80}
+            "defect_rate": 0.02, "fulfillment_rate": 0.80, "evidence_pos": 20}
     return {**base, **kw}
 
 
@@ -279,6 +331,9 @@ def test_rule_thresholds_are_unchanged():
     ({"fulfillment_rate": 0.90}, "Reliable"),
     ({"fulfillment_rate": 0.8999}, "Standard"),
     ({"available_qty": 299}, "Ineligible"),
+    # quality labels need the supplier's OWN evidence; an estimate that is only the prior is "Unrated"
+    ({"defect_rate": 0.20, "evidence_pos": 4}, "Unrated"),
+    ({"lead_time_days": 2.0, "defect_rate": 0.01, "fulfillment_rate": 0.99, "evidence_pos": 0}, "Unrated"),
 ])
 def test_rule_outcomes(kw, expected):
     assert knowledge_agent.evaluate_supplier(_candidate(**kw), 300, [])["supplier_status"] == expected
@@ -298,15 +353,26 @@ def test_capacity_rule_is_in_the_trace():
 def test_dashboard_is_sku_based(client):
     body = client.get("/api/dashboard").json()
     assert body["snapshot_date"] == "2024-12-30"
-    assert body["kpis"]["critical_low_stock_skus"] == len(body["alerts"]) == 11
-    assert body["kpi_provenance"]["avg_supplier_fulfillment_rate"] == "SIMULATED"
+    assert body["kpis"]["critical_low_stock_skus"] == len(body["alerts"]) == 12
+    assert body["kpi_provenance"]["avg_supplier_fulfillment_rate"] == "ESTIMATED"
     assert all(a["sku_id"].startswith("SKU_") for a in body["alerts"])
+    assert all(0 <= a["stockout_probability"] <= 1 and a["urgent_reasons"] for a in body["alerts"])
 
 
 def test_pipeline_by_sku(client):
     body = client.post("/api/run-agent-pipeline?sku_id=SKU_2").json()
     assert body["sku_id"] == "SKU_2"
-    assert body["supplier"]["field_provenance"]["available_qty"] == "SIMULATED"
+    assert body["supplier"]["field_provenance"]["available_qty"] == "ESTIMATED"
+    assert "SIMULATED" not in str(body)
+
+
+def test_model_card_reports_the_backtest(client):
+    body = client.get("/api/model").json()
+    bt = body["demand_forecaster"]["backtest"]
+    k = bt["selected_k"]
+    for h in (7, 14):
+        assert bt[f"block_h{h}"][f"model_k{k}"] < bt[f"block_h{h}"]["baseline_trailing_28d"]
+        assert bt[f"strict_h{h}"][f"model_k{k}"] < bt[f"strict_h{h}"]["baseline_trailing_28d"]
 
 
 def test_product_id_can_no_longer_trigger_procurement(client):
@@ -409,14 +475,19 @@ def test_pipeline_runs_on_non_csv_data_with_the_same_schema():
     sc = pd.DataFrame(rows)
     sc.to_sql("supply_chain", c, index=False)
     database._build_sku_supplier_lanes(sc).to_sql("sku_supplier_lanes", c, index=False)
+    model = demand_forecaster.fit(sc, run_backtest=False)
+    demand_forecaster.lane_statistics(sc, model, config.ORDER_CYCLE_FALLBACK_DAYS).to_sql("lane_stats", c, index=False)
+    pd.DataFrame([{"name": "demand_forecaster", "payload": model.to_json()}]).to_sql("ml_models", c, index=False)
+    extra = {"defect_sd": 0.0, "evidence_pos": 40, "capacity_orders": 3, "evidence_source": "ERP"}
     pd.DataFrame([
-        {"sku_id": "ERP_SKU", "supplier_id": "ERP_S1", "available_qty": 500, "defect_rate": 0.01, "fulfillment_rate": 0.97},
-        {"sku_id": "ERP_SKU", "supplier_id": "ERP_S2", "available_qty": 50, "defect_rate": 0.01, "fulfillment_rate": 0.97},
+        {"sku_id": "ERP_SKU", "supplier_id": "ERP_S1", "available_qty": 500, "defect_rate": 0.01, "fulfillment_rate": 0.97, **extra},
+        {"sku_id": "ERP_SKU", "supplier_id": "ERP_S2", "available_qty": 40, "defect_rate": 0.01, "fulfillment_rate": 0.97, **extra},
     ]).to_sql("supplier_sku_profile", c, index=False)
     pd.DataFrame({"season": ["Winter"], "is_weekend": [False]}).to_sql("calendar", c, index=False)
 
     result = coordinator_agent.run_pipeline(c, "ERP_SKU")
-    assert result["focus_fact"]["RequiredQuantity"] == 120
+    # 10 units/day, lead 4 d + order cycle 10 d -> order up to 140; inventory 90 -> 50
+    assert result["focus_fact"]["RequiredQuantity"] == 50
     assert result["supplier"]["filtered_out_suppliers"] == ["ERP_S2"]
     assert result["knowledge"]["recommended_supplier"]["supplier_status"] == "Reliable"
     assert result["planning"]["status"] == "planned"

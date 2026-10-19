@@ -5,16 +5,23 @@ Cross-references the cleaned `calendar` table (working days / weekend
 detection, seasonality) to project a realistic arrival date, computes order
 economics, a replenishment curve, and designates a backup supplier.
 
-The order quantity is the Perception Agent's required_quantity, already rounded
-and already checked against the primary supplier's availability. No plan is
-produced when nothing is needed or when no single supplier qualifies.
+The order quantity is the Perception Agent's forecast-based required_quantity,
+already rounded and checked against supplier capacity. When no single supplier
+can cover it the order is split (Knowledge Agent Rule 6); when even all
+suppliers together fall short a PARTIAL plan is produced with its shortfall.
+
+The projected-inventory curve subtracts the demand FORECAST for each day (the
+trained model, day i after the data snapshot), not a flat trailing average.
 """
 from __future__ import annotations
 
 import sqlite3
 from datetime import date, datetime, timedelta
 
+import numpy as np
 import pandas as pd
+
+from backend.ml.store import load_demand_model
 
 
 def _add_working_days(start: date, working_days: int) -> date:
@@ -42,6 +49,24 @@ def _seasonality_delay_map(conn: sqlite3.Connection) -> dict[str, int]:
     return delay.to_dict()
 
 
+def _demand_path(conn: sqlite3.Connection, sku_fact: dict, days: int) -> list[float]:
+    """Forecast units/day for the SKU's focus lanes, for days 1..days after the snapshot."""
+    model = load_demand_model(conn)
+    start = pd.Timestamp(sku_fact["snapshot_date"]) + pd.Timedelta(days=1)
+    daily = model.expected_daily(pd.date_range(start, periods=days + 1))
+    scale = sum(l.get("DemandScale", 1.0) for l in sku_fact.get("focus_lanes", [])) or 1.0
+    return list(np.asarray(daily) * scale)
+
+
+def _curve(today: date, start_level: float, arrivals: dict[date, int], demand: list[float]) -> list[dict]:
+    curve, level = [], float(start_level)
+    for i, d in enumerate(demand):
+        day = today + timedelta(days=i)
+        level = max(0.0, level - d) + arrivals.get(day, 0)
+        curve.append({"date": day.isoformat(), "projected_inventory": int(round(level))})
+    return curve
+
+
 def build_plan(
     conn: sqlite3.Connection,
     sku_fact: dict | None,
@@ -66,13 +91,10 @@ def build_plan(
         return {
             "agent": "Planning Agent",
             "status": "no_eligible_supplier",
-            "error": f"No single supplier can fulfil {required_quantity:.0f} units — no supplier was selected.",
+            "error": f"No supplier has any capacity for this SKU — {required_quantity:.0f} units cannot be planned.",
             "combined_available_qty": combined,
             "reasoning": [
-                f"Every candidate's available quantity is below the required {required_quantity:.0f} units.",
-                f"Combined availability across candidates is {combined} units; "
-                + ("a split order across suppliers could cover it (not implemented)." if combined >= required_quantity
-                   else "even a split order could not cover it."),
+                f"Combined capacity across all candidates is {combined} units, so not even a partial order is possible.",
             ],
         }
 
@@ -105,19 +127,14 @@ def build_plan(
     else:
         trace.append("No backup supplier available in the current candidate pool.")
 
-    daily_demand = max(1, round(sku_fact.get("DailyDemand") or 0))
-    trace.append(f"Daily demand {daily_demand} units = mean real Units_Sold over the last 28 days of the {sku_fact.get('focus_scope', 'lanes')}.")
-    current_inventory = sku_fact.get("Inventory", 0)
     horizon_days = max((final_arrival - today).days + 7, 7)
-
-    curve = []
-    level = current_inventory
-    for i in range(horizon_days + 1):
-        day = today + timedelta(days=i)
-        if day == final_arrival:
-            level += order_quantity
-        level = max(0, level - daily_demand) if day != final_arrival else level
-        curve.append({"date": day.isoformat(), "projected_inventory": level})
+    demand = _demand_path(conn, sku_fact, horizon_days)
+    daily_demand = round(float(np.mean(demand)), 1)
+    trace.append(
+        f"Projected inventory uses the demand forecast day by day (avg {daily_demand} units/day over the next "
+        f"{horizon_days} days; previous method, the last-28-day average, was {sku_fact.get('TrailingDailyDemand')})."
+    )
+    curve = _curve(today, sku_fact.get("Inventory", 0), {final_arrival: order_quantity}, demand)
 
     return {
         "agent": "Planning Agent",
@@ -148,6 +165,7 @@ def build_split_plan(
     allocations: list[dict],
     backup_candidates: list[dict],
     required_quantity: float,
+    shortfall_qty: int = 0,
 ) -> dict:
     """Plan an order that no single supplier could cover: one purchase line per
     allocated supplier, each with its own cost and arrival date. The order is
@@ -156,8 +174,13 @@ def build_split_plan(
     season_delays = _seasonality_delay_map(conn)
     trace: list[str] = [
         f"No single supplier can fulfil {int(required_quantity)} units, so the order is split across "
-        f"{len(allocations)} suppliers (safe suppliers first, in heuristic-rank order)."
+        f"{len(allocations)} suppliers (fewest suppliers, safe ones first, filled in heuristic-rank order)."
     ]
+    if shortfall_qty:
+        trace.append(
+            f"PARTIAL ORDER: all suppliers together can supply only {int(required_quantity) - shortfall_qty} units; "
+            f"{shortfall_qty} units remain uncovered and must be sourced from a new supplier or a later order."
+        )
 
     lines: list[dict] = []
     arrivals: dict[date, int] = {}
@@ -207,23 +230,19 @@ def build_split_plan(
     else:
         trace.append("No unused, non-High-Risk supplier is available as a backup.")
 
-    daily_demand = max(1, round(sku_fact.get("DailyDemand") or 0))
-    trace.append(f"Daily demand {daily_demand} units = mean real Units_Sold over the last 28 days of the {sku_fact.get('focus_scope', 'lanes')}.")
-    level = sku_fact.get("Inventory", 0)
     horizon_days = max((final_arrival - today).days + 7, 7)
-    curve = []
-    for i in range(horizon_days + 1):
-        day = today + timedelta(days=i)
-        if day in arrivals:
-            level += arrivals[day]
-        else:
-            level = max(0, level - daily_demand)
-        curve.append({"date": day.isoformat(), "projected_inventory": level})
+    demand = _demand_path(conn, sku_fact, horizon_days)
+    daily_demand = round(float(np.mean(demand)), 1)
+    trace.append(f"Projected inventory uses the demand forecast day by day (avg {daily_demand} units/day).")
+    curve = _curve(today, sku_fact.get("Inventory", 0), arrivals, demand)
 
     return {
         "agent": "Planning Agent",
         "status": "planned",
         "split_order": True,
+        "partial_order": bool(shortfall_qty),
+        "required_quantity": int(required_quantity),
+        "shortfall_qty": int(shortfall_qty),
         "sku_id": sku_fact["sku_id"],
         "order_quantity": order_quantity,
         "allocations": lines,
@@ -248,6 +267,7 @@ def run(conn: sqlite3.Connection, sku_fact: dict | None, knowledge_result: dict,
         return build_split_plan(
             conn, sku_fact, knowledge_result["allocations"],
             knowledge_result.get("backup_candidates", []), required_quantity,
+            knowledge_result.get("shortfall_qty", 0),
         )
     primary = knowledge_result.get("recommended_supplier")
     candidates = knowledge_result.get("annotated_candidates", [])

@@ -1,18 +1,22 @@
 """
-Data ingestion layer: loads the 6 raw CSVs plus the simulated supplier-SKU
-profile, cleans them, and materializes cleaned + derived tables into a local
-SQLite database for fast agent queries. Raw CSVs are only ever read.
+Data ingestion layer: loads the 6 raw CSVs, cleans them, trains the demand
+forecaster, estimates the supplier-SKU profile from real history, and
+materializes cleaned + derived tables into a local SQLite database for fast
+agent queries. Raw CSVs are only ever read.
 
 Run standalone (`python backend/database.py`) to (re)build data/insightiq.db.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import contextmanager
 
+import numpy as np
 import pandas as pd
 
 from backend import config
+from backend.ml import demand_forecaster, supplier_estimator
 
 # ---------------------------------------------------------------------------
 # Low level helpers
@@ -151,7 +155,7 @@ def _load_supply_chain() -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Derived: SKU-supplier lanes (REAL) and supplier-SKU profile (SIMULATED)
+# Derived: SKU-supplier lanes (REAL), supplier-SKU profile (ESTIMATED), models
 # ---------------------------------------------------------------------------
 
 LANE_ATTRIBUTES = ["supplier_id", "unit_cost", "supplier_lead_time_days"]
@@ -173,13 +177,11 @@ def _build_sku_supplier_lanes(supply_chain: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-PROFILE_COLUMNS = ["sku_id", "supplier_id", "available_qty", "defect_rate", "fulfillment_rate"]
+PROFILE_COLUMNS = supplier_estimator.PROFILE_COLUMNS
 
 
-def _load_supplier_sku_profile(supply_chain: pd.DataFrame) -> pd.DataFrame:
-    """Load the supplier-SKU profile (simulated today, ERP-fed later) and reject
-    anything that would invent a relationship or carry impossible values."""
-    df = pd.read_csv(config.CSV_PATHS["supplier_sku_profile"])
+def _validate_supplier_profile(df: pd.DataFrame, supply_chain: pd.DataFrame) -> pd.DataFrame:
+    """Reject anything that would invent a relationship or carry impossible values."""
     if list(df.columns) != PROFILE_COLUMNS:
         raise ValueError(f"supplier_sku_profile columns {list(df.columns)} != {PROFILE_COLUMNS}")
     if df.duplicated(["sku_id", "supplier_id"]).any():
@@ -188,9 +190,35 @@ def _load_supplier_sku_profile(supply_chain: pd.DataFrame) -> pd.DataFrame:
     invented = [p for p in map(tuple, df[["sku_id", "supplier_id"]].to_numpy()) if p not in real_pairs]
     if invented:
         raise ValueError(f"supplier_sku_profile contains pairs absent from supply_chain: {invented[:5]}")
-    if (df["available_qty"] < 0).any() or not df[["defect_rate", "fulfillment_rate"]].stack().between(0, 1).all():
+    if (df["available_qty"].dropna() < 0).any() or not df[["defect_rate", "fulfillment_rate"]].stack().between(0, 1).all():
         raise ValueError("supplier_sku_profile contains out-of-range values")
     return df
+
+
+def _json_default(value):
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        return float(value)
+    raise TypeError(type(value))
+
+
+def _build_models(supply_chain: pd.DataFrame, kpi: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """Train the demand forecaster, derive per-lane stats, and estimate the supplier profile."""
+    model = demand_forecaster.fit(supply_chain)
+    lane_stats = demand_forecaster.lane_statistics(
+        supply_chain, model, config.ORDER_CYCLE_FALLBACK_DAYS
+    )
+    profile, supplier_meta = supplier_estimator.build_profile(supply_chain, kpi)
+    models = pd.DataFrame([
+        {"name": "demand_forecaster", "payload": model.to_json()},
+        {"name": "supplier_estimator", "payload": json.dumps(supplier_meta, default=_json_default)},
+    ])
+    return {
+        "lane_stats": lane_stats,
+        "supplier_sku_profile": _validate_supplier_profile(profile, supply_chain),
+        "ml_models": models,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +227,7 @@ def _load_supplier_sku_profile(supply_chain: pd.DataFrame) -> pd.DataFrame:
 
 TABLES_TO_BUILD = [
     "products", "orders", "customers", "calendar", "procurement_kpi",
-    "supply_chain", "sku_supplier_lanes", "supplier_sku_profile",
+    "supply_chain", "sku_supplier_lanes", "supplier_sku_profile", "lane_stats", "ml_models",
 ]
 
 # Removed in schema v2: built on an unsupported round-robin mapping of KPI
@@ -246,15 +274,16 @@ def build_database(force: bool = False) -> None:
                 return
 
     supply_chain = _load_supply_chain()
+    kpi = _load_procurement_kpi()
     tables = {
         "products": _load_products(),
         "orders": _load_orders(),
         "customers": _load_customers(),
         "calendar": _load_calendar(),
-        "procurement_kpi": _load_procurement_kpi(),
+        "procurement_kpi": kpi,
         "supply_chain": supply_chain,
         "sku_supplier_lanes": _build_sku_supplier_lanes(supply_chain),
-        "supplier_sku_profile": _load_supplier_sku_profile(supply_chain),
+        **_build_models(supply_chain, kpi),
     }
 
     with connect() as conn:
@@ -270,6 +299,8 @@ def build_database(force: bool = False) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_supply_chain_sku_date ON supply_chain(sku_id, date)")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_lanes_sku_warehouse ON sku_supplier_lanes(sku_id, warehouse_id)")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_profile_sku_supplier ON supplier_sku_profile(sku_id, supplier_id)")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_lane_stats ON lane_stats(sku_id, warehouse_id)")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_ml_models_name ON ml_models(name)")
         conn.execute(f"PRAGMA user_version = {config.SCHEMA_VERSION}")
         conn.commit()
 

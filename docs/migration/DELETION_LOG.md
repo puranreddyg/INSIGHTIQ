@@ -84,3 +84,11 @@ Every deletion below is of a derived database artefact, code, or behaviour.
 - **Future impact:** None
 - **Preserved in backup:** git history
 - **Replaced by:** GET /api/skus (old path returns 410)
+
+## 11. Simulated supplier-SKU profile (2026-10-19)
+- **Count:** 1 generator (`backend/simulation/`), 4 files in `DataSets/simulated/`, 14 tests
+- **Why:** Its `available_qty`, `defect_rate` and `fulfillment_rate` were random draws
+- **Evidence:** Replaced by values learned or measured from real data (docs/PREDICTIVE_MODEL.md)
+- **Future impact:** None. Real supplier records can be added in `DataSets/supplier_evidence/`
+- **Preserved in backup:** git history (commit e74f7a3)
+- **Replaced by:** `backend/ml/supplier_estimator.py` (proven capacity + empirical-Bayes quality) and `backend/ml/demand_forecaster.py`
