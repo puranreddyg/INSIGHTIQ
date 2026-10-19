@@ -20,7 +20,7 @@ const Api = (() => {
       const qs = new URLSearchParams(params).toString();
       return _req(`/api/skus?${qs}`);
     },
-    runPipeline: (skuId) => _req(`/api/run-agent-pipeline?sku_id=${encodeURIComponent(skuId)}`, { method: "POST" }),
+    runPipeline: (skuId, budget) => _req(`/api/run-agent-pipeline?sku_id=${encodeURIComponent(skuId)}${budget ? `&budget=${encodeURIComponent(budget)}` : ""}`, { method: "POST" }),
     suppliers: (skuId, requiredQuantity = null) => {
       const qs = new URLSearchParams({ sku_id: skuId });
       if (requiredQuantity !== null) qs.set("required_quantity", requiredQuantity);
@@ -29,5 +29,6 @@ const Api = (() => {
     approveOrder: (payload) => _req("/api/approve-order", { method: "POST", body: JSON.stringify(payload) }),
     approveSplitOrder: (payload) => _req("/api/approve-split-order", { method: "POST", body: JSON.stringify(payload) }),
     orders: () => _req("/api/orders"),
+    forecastEvaluation: (protocol, skuId) => _req(`/api/forecast-evaluation?protocol=${encodeURIComponent(protocol)}${skuId ? `&sku_id=${encodeURIComponent(skuId)}` : ""}`),
   };
 })();

@@ -2,6 +2,7 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pandas==2.2.3
 numpy==2.2.1
+scipy==1.14.1
 pydantic==2.10.4
 python-multipart==0.0.20
 pytest==8.3.4

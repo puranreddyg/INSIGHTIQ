@@ -90,3 +90,32 @@ predicted defect rate ≤ 5%, at most 3 suppliers. Objective: fewest High Risk s
 then fewest suppliers, then highest score. An exhaustive test confirms it finds the
 optimum for every urgent SKU. If no combination can meet the 5% rule, the lowest-defect
 option is chosen and flagged; if capacity is short, a partial order reports the shortfall.
+
+---
+
+# Update 2026-10-20 (2): budget constraint, exact allocation, forecast evaluation page
+
+**Supplier selection.** A single supplier is chosen only if it meets capacity, quality (not High Risk) and
+**budget** (Rule 7: qty × unit cost ≤ budget; default budget = qty × the SKU's mean lane unit cost × 1.10,
+or the `budget` query parameter). Otherwise Rule 6 searches combinations; inside each candidate set the
+quantities are solved exactly with an integer linear program (scipy `milp`) under: capacity, ≥ 50 units per
+line, full quantity, weighted predicted defect ≤ 5%, total cost ≤ budget, ≤ 3 suppliers. **A split is made
+only if every constraint holds.** If none does: a single supplier that can cover the order alone is chosen
+with the smallest violation and flagged; otherwise the SKU goes to **needs review** (no order). Partial
+orders (capacity short) must still meet quality and budget. An independent brute-force enumeration in the
+tests confirms the result is optimal for every urgent SKU.
+
+**Forecast Evaluation page** (`/api/forecast-evaluation`, `backend/ml/forecast_evaluation.py`).
+Train 2024-01-01–09-30, test 10-01–12-30 (91 days, unseen). Weekly re-forecast protocol:
+
+| Level | Method | MAE | RMSE | MAPE |
+|---|---|---|---|---|
+| All-SKU daily total | Learned model | 72.0 | 88.0 | 2.28% |
+| | 28-day average (previous) | 426.3 | 496.4 | 11.55% |
+| | 7-day average | 209.2 | 247.4 | 5.88% |
+| Per lane per day | Learned model | 4.16 | 5.23 | 49.0% |
+| | 28-day average | 4.49 | 5.67 | 47.1% |
+| | 7-day average | 4.49 | 5.65 | 49.6% |
+
+The model wins MAE/RMSE at both levels; per-lane MAPE is slightly worse than the 28-day average
+(MAPE over-weights low-sales days; zero-sales days are excluded).

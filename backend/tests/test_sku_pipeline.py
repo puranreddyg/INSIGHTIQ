@@ -200,111 +200,101 @@ def test_recommendations_differ_across_urgent_skus(conn, urgent):
     assert len(recommended) >= 3
 
 
-def _blocked(conn, urgent):
-    """Urgent SKUs where no single supplier can cover the whole request."""
-    return [r for r in urgent if not supplier_agent.rank_suppliers(conn, r["sku_id"], r["RequiredQuantity"])["eligible_count"]]
+def _lines(plan):
+    if plan.get("split_order"):
+        return [(l["supplier_id"], l["quantity"]) for l in plan["allocations"]]
+    return [(plan["primary_supplier_id"], plan["order_quantity"])]
 
 
-def test_partial_order_is_planned_when_even_the_combined_capacity_is_short(conn):
-    """Not 'unprocessable': every supplier is used to its capacity and the gap is reported."""
+def test_partial_order_meets_quality_and_budget_when_capacity_is_short(conn):
+    """Not 'unprocessable': buy the most that still meets quality, budget and size, report the gap."""
     from backend.agents import planning_agent
     focus = perception_agent.observe_sku(conn, "SKU_44")
     impossible = 10**6
     sup = supplier_agent.rank_suppliers(conn, "SKU_44", impossible)
     combined = sup["combined_available_qty"]
-    assert sup["no_eligible_supplier"] and sup["partial_order_possible"] and not sup["split_order_possible"]
-    assert sup["shortfall_qty"] == impossible - combined
+    assert sup["no_eligible_supplier"] and sup["partial_order_possible"]
     know = knowledge_agent.run({"focus_facts": [focus]}, sup)
-    assert know["split_order"] and know["partial_order"] and know["shortfall_qty"] == impossible - combined
-    assert {a["supplier_id"]: a["allocated_qty"] for a in know["allocations"]} == \
-        {c["supplier_id"]: c["available_qty"] for c in sup["split_candidates"]}
+    assert know["decision"] == "partial" and know["split_order"] and know["partial_order"]
+    pool = {c["supplier_id"]: c for c in sup["pool_candidates"]}
+    lines = [(a["supplier_id"], a["allocated_qty"]) for a in know["allocations"]]
+    qty = sum(q for _, q in lines)
+    assert 0 < qty <= combined and len(lines) <= config.SEARCH_MAX_SUPPLIERS
+    assert all(config.MIN_SPLIT_LINE_QTY <= q <= pool[s]["available_qty"] for s, q in lines)
+    assert sum(q * pool[s]["defect_rate"] for s, q in lines) <= config.RULE_HIGH_RISK_DEFECT_RATE * qty + 1e-6
+    assert know["shortfall_qty"] == impossible - qty
     plan = planning_agent.run(conn, focus, know, impossible, sup)
-    assert plan["status"] == "planned" and plan["partial_order"] is True
-    assert plan["order_quantity"] == combined and plan["shortfall_qty"] == impossible - combined
+    assert plan["status"] == "planned" and plan["partial_order"] and plan["order_quantity"] == qty
 
 
-def test_nothing_is_planned_only_when_no_supplier_has_any_capacity(conn):
+def test_needs_review_when_no_supplier_has_any_capacity(conn):
     from backend.agents import planning_agent
     focus = perception_agent.observe_sku(conn, "SKU_44")
-    pool = [{**c, "available_qty": None} for c in supplier_agent.full_matrix(conn, "SKU_44")["ranked_candidates"]]
-    sup = {"required_quantity": 500, "ranked_candidates": [], "split_candidates": [], "split_order_possible": False,
-           "partial_order_possible": False, "no_eligible_supplier": True, "combined_available_qty": 0,
-           "ineligible_suppliers": pool}
+    sup = {"required_quantity": 500, "ranked_candidates": [], "split_candidates": [], "pool_candidates": [],
+           "split_order_possible": False, "partial_order_possible": False, "no_eligible_supplier": True,
+           "combined_available_qty": 0, "ineligible_suppliers": [], "budget": None}
     know = knowledge_agent.run({"focus_facts": [focus]}, sup)
-    assert know["recommended_supplier"] is None and know["allocations"] == []
+    assert know["decision"] == "needs_review" and know["recommended_supplier"] is None and know["allocations"] == []
     plan = planning_agent.run(conn, focus, know, 500, sup)
-    assert plan["status"] == "no_eligible_supplier" and "order_quantity" not in plan
+    assert plan["status"] == "needs_review" and "order_quantity" not in plan
 
 
-def test_split_order_covers_a_request_no_single_supplier_can(conn, urgent):
-    blocked = _blocked(conn, urgent)
-    assert blocked, "expected at least one urgent SKU with no single eligible supplier"
-    for r in blocked:
-        result = coordinator_agent.run_pipeline(conn, r["sku_id"])
-        plan, know = result["planning"], result["knowledge"]
-        assert plan["status"] == "planned" and plan["split_order"] is True
-        lines = plan["allocations"]
-        ids = [l["supplier_id"] for l in lines]
-        assert len(lines) >= 2 and len(set(ids)) == len(ids)
-        # exactly the required quantity, never more than any supplier has, only real suppliers of the SKU
-        assert sum(l["quantity"] for l in lines) == plan["order_quantity"] == r["RequiredQuantity"]
-        available = {c["supplier_id"]: c["available_qty"] for c in supplier_agent.full_matrix(conn, r["sku_id"])["ranked_candidates"]}
-        assert all(0 < l["quantity"] <= available[l["supplier_id"]] for l in lines)
-        # cost and delivery roll up from the lines
-        assert plan["total_expense"] == pytest.approx(sum(l["expense"] for l in lines), abs=0.02)
-        assert plan["estimated_arrival_date"] == max(l["estimated_arrival_date"] for l in lines)
-        assert know["split_order"] is True and know["recommended_supplier"]["supplier_id"] == ids[0]
-        assert plan["backup_supplier_id"] not in ids
+def test_no_split_is_made_when_the_combination_breaks_a_constraint(conn):
+    """SKU_5: no single supplier can cover it and no combination meets the 5% defect rule,
+    so the order must NOT be split — it goes to manual review."""
+    res = coordinator_agent.run_pipeline(conn, "SKU_5")
+    assert res["knowledge"]["decision"] == "needs_review" and res["knowledge"]["allocations"] == []
+    assert res["planning"]["status"] == "needs_review" and "defect" in res["planning"]["error"]
 
 
-def _brute_force_best(pool, required):
-    """Exhaustive check: (fewest High Risk, fewest suppliers) among plans meeting capacity,
-    quantity and the 5% weighted-defect rule. Filling lowest-defect first is the best a
-    set can do on quality, so a set is feasible iff that fill meets the rule."""
-    from itertools import combinations
-    cap = config.RULE_HIGH_RISK_DEFECT_RATE
-    best = None
-    for k in range(1, config.SEARCH_MAX_SUPPLIERS + 1):
-        for sub in combinations(pool, k):
-            if sum(c["available_qty"] for c in sub) < required:
-                continue
-            rem, bad = required, 0.0
-            for c in sorted(sub, key=lambda c: c["defect_rate"]):
-                q = min(c["available_qty"], rem); bad += q * c["defect_rate"]; rem -= q
-            if bad / required <= cap + 1e-12:
-                key = (sum(c["defect_rate"] > cap and c.get("evidence_pos", 0) >= config.RULE_MIN_EVIDENCE_POS for c in sub), k)
-                best = key if best is None or key < best else best
-    return best
+def test_budget_constraint_is_enforced_and_can_be_set_by_the_caller(conn):
+    sku = "SKU_21"
+    default = coordinator_agent.run_pipeline(conn, sku)
+    assert default["knowledge"]["decision"] == "single"
+    assert default["planning"]["total_expense"] <= default["supplier"]["budget"]
+    assert default["supplier"]["budget_info"]["source"] == "default"
+    # a budget too small for any supplier: no compliant split, single best-effort flagged on budget
+    tiny = coordinator_agent.run_pipeline(conn, sku, budget=10.0)
+    assert tiny["supplier"]["budget"] == 10.0 and tiny["knowledge"]["budget_constraint_met"] is False
+    assert tiny["knowledge"]["decision"] in ("single_flagged", "needs_review")
+    assert any(t.get("ruleId") == 7 and t["matched"] is False for t in tiny["knowledge"]["reasoning_trace"])
 
 
-def test_every_plan_meets_the_constraints_or_proves_they_cannot_be_met(conn, urgent):
-    """End-to-end over every urgent SKU: capacity, quantity and quality constraints,
-    and optimality of the supplier combination against an exhaustive search."""
+def test_every_plan_meets_all_constraints_and_is_optimal(conn, urgent):
+    """End-to-end over every urgent SKU, checked against an independent exhaustive
+    enumeration (backend/tests/_bruteforce.py, no solver): splits/singles meet capacity,
+    quantity, quality and budget and are optimal (fewest High Risk, then fewest suppliers);
+    a flag or review happens ONLY when no compliant plan exists."""
+    from backend.tests._bruteforce import best_key
     cap = config.RULE_HIGH_RISK_DEFECT_RATE
     for r in urgent:
         res = coordinator_agent.run_pipeline(conn, r["sku_id"])
         plan, know, sup = res["planning"], res["knowledge"], res["supplier"]
-        assert plan["status"] == "planned", r["sku_id"]
+        R, budget = r["RequiredQuantity"], sup["budget"]
         pool = {c["supplier_id"]: c for c in sup["pool_candidates"]}
-        lines = ([(l["supplier_id"], l["quantity"]) for l in plan["allocations"]] if plan.get("split_order")
-                 else [(plan["primary_supplier_id"], plan["order_quantity"])])
-        assert all(0 < q <= pool[s]["available_qty"] for s, q in lines)                       # C1 capacity
-        assert sum(q for _, q in lines) + plan.get("shortfall_qty", 0) == r["RequiredQuantity"]  # C2 quantity
-        assert len(lines) <= max(config.SEARCH_MAX_SUPPLIERS, len(pool))                           # C4 size
-        w_def = sum(q * pool[s]["defect_rate"] for s, q in lines) / sum(q for _, q in lines)
+        best = best_key(list(pool.values()), R, budget)
+        if know["decision"] == "needs_review":
+            assert best is None and plan["status"] == "needs_review", r["sku_id"]
+            continue
+        assert plan["status"] == "planned", r["sku_id"]
+        lines = _lines(plan)
+        qty = sum(q for _, q in lines)
+        cost = sum(q * pool[s]["unit_cost"] for s, q in lines)
+        w_def = sum(q * pool[s]["defect_rate"] for s, q in lines) / qty
+        assert all(0 < q <= pool[s]["available_qty"] for s, q in lines)            # capacity
+        assert qty + plan.get("shortfall_qty", 0) == R                              # quantity
+        assert plan["total_expense"] == pytest.approx(cost, abs=0.05)
         assert plan["predictions"]["expected_defect_rate"] == pytest.approx(w_def, abs=1e-4)
-        best = _brute_force_best(list(pool.values()), r["RequiredQuantity"])
-        if plan["quality_constraint_met"]:
-            assert w_def <= cap + 1e-9, r["sku_id"]                                               # C3 quality
-            if plan.get("split_order") and not plan.get("partial_order"):
-                risky = sum(pool[s]["defect_rate"] > cap for s, _ in lines)
-                assert (risky, len(lines)) == best, (r["sku_id"], (risky, len(lines)), best)      # optimal
+        if know["decision"] in ("single", "split"):
+            assert w_def <= cap + 1e-9 and cost <= budget + 0.01, r["sku_id"]       # quality + budget
+            assert len(lines) <= config.SEARCH_MAX_SUPPLIERS
+            risky = sum(pool[s]["defect_rate"] > cap for s, _ in lines)
+            assert (risky, len(lines)) == best, (r["sku_id"], (risky, len(lines)), best)  # optimal
+            if know["decision"] == "split":
+                assert all(q >= config.MIN_SPLIT_LINE_QTY for _, q in lines)
         else:
-            assert best is None, r["sku_id"]  # flagged only when no combination can meet the rule
-            # and then the lowest-defect option was chosen
-            if not plan.get("split_order"):
-                eligible = [c for c in pool.values() if c["available_qty"] >= r["RequiredQuantity"]]
-                assert pool[lines[0][0]]["defect_rate"] == min(c["defect_rate"] for c in eligible)
+            assert know["decision"] == "single_flagged" and best is None, r["sku_id"]
+            assert not (plan["quality_constraint_met"] and plan["budget_constraint_met"])
 
 
 def test_split_allocation_unit_behaviour():
@@ -317,14 +307,24 @@ def test_split_allocation_unit_behaviour():
     allocs, spare, short = knowledge_agent.allocate_split_order(cands, 450, [])
     assert [(a["supplier_id"], a["allocated_qty"]) for a in allocs] == [("A", 300), ("C", 150)]
     assert [s["supplier_id"] for s in spare] == ["B"] and spare[0]["supplier_status"] == "High Risk" and short == 0
-    # 700 needs B. A + B (300 + 400) would be 6.6% defective, breaking the 5% rule, so the
-    # search adds C and gives B only what quality allows: 2% x 300 + 3% x 200 + 10% x 200 = 4.6%
+    # 700 needs B. The exact allocation gives B (better score than C) as much as the 5% rule allows:
+    # 2%*300 + 10%*qB + 3%*(400-qB) <= 35  ->  qB <= 242
     allocs, spare, short = knowledge_agent.allocate_split_order(cands, 700, [])
-    assert [(a["supplier_id"], a["allocated_qty"]) for a in allocs] == [("A", 300), ("B", 200), ("C", 200)] and short == 0
-    assert spare == [] and allocs[0]["search"]["weighted_defect_rate"] == pytest.approx(0.0457, abs=1e-4)
-    # 1000 exceeds everyone together (950) -> partial order using every supplier, shortfall 50
+    assert [(a["supplier_id"], a["allocated_qty"]) for a in allocs] == [("A", 300), ("B", 242), ("C", 158)] and short == 0
+    assert allocs[0]["search"]["weighted_defect_rate"] <= 0.05
+    # a budget that rules out the 3-supplier plan -> no split at all
+    allocs, spare, short = knowledge_agent.allocate_split_order(cands, 700, [], budget=100.0)
+    assert allocs == [] and short == 700
+    # 1000 exceeds everyone together (950): partial order, still within 5% defects:
+    # A300 + C200 + B260 -> 6 + 6 + 26 = 38 <= 5% of 760
     allocs, spare, short = knowledge_agent.allocate_split_order(cands, 1000, [])
-    assert sum(a["allocated_qty"] for a in allocs) == 950 and short == 50 and spare == []
+    assert sum(a["allocated_qty"] for a in allocs) == 760 and short == 240
+
+
+def test_split_respects_the_minimum_line_size():
+    cands = [_candidate(supplier_id="A", rank=1, available_qty=520), _candidate(supplier_id="B", rank=2, available_qty=520)]
+    allocs, _, _ = knowledge_agent.allocate_split_order(cands, 540, [])
+    assert sorted(a["allocated_qty"] for a in allocs) == [50, 490]  # B gets the minimum line, not 20 units
 
 
 def test_split_prefers_fewer_suppliers_over_more():

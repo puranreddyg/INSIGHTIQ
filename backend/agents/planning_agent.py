@@ -289,6 +289,14 @@ def _add_predictions(plan: dict, lines: list[tuple[dict, int]], knowledge_result
         } for c, _ in lines],
     }
     plan["quality_constraint_met"] = bool(knowledge_result.get("quality_constraint_met", True))
+    plan["budget_constraint_met"] = bool(knowledge_result.get("budget_constraint_met", True))
+    plan["budget"] = knowledge_result.get("budget")
+    plan["decision"] = knowledge_result.get("decision")
+    if plan["budget"] is not None:
+        plan["reasoning"].append(
+            f"Budget: total cost ₹{plan['total_expense']:,.2f} vs budget ₹{plan['budget']:,.2f} "
+            f"({'within' if plan['total_expense'] <= plan['budget'] + 0.01 else 'OVER'} budget)."
+        )
     plan["reasoning"].append(
         f"Supplier model: of {qty} units ordered, about {int(round(good))} are expected to arrive usable "
         f"(predicted defect rate {w_def:.1%}, short shipments included); probability that "
@@ -298,13 +306,25 @@ def _add_predictions(plan: dict, lines: list[tuple[dict, int]], knowledge_result
     if not plan["quality_constraint_met"]:
         plan["reasoning"].append(
             "QUALITY FLAG: no supplier or combination keeps the predicted defect rate within the 5% rule — "
-            "the lowest-defect option was chosen; review before approving."
+            "the smallest violation was chosen; review before approving."
         )
+    if not plan["budget_constraint_met"]:
+        plan["reasoning"].append("BUDGET FLAG: no compliant option fits the budget; review before approving.")
     return plan
 
 
 def run(conn: sqlite3.Connection, sku_fact: dict | None, knowledge_result: dict, required_quantity: float,
         supplier_result: dict | None = None) -> dict:
+    if required_quantity and knowledge_result.get("decision") == "needs_review":
+        reason = knowledge_result.get("review_reason") or "no supplier plan meets the constraints"
+        return {
+            "agent": "Planning Agent",
+            "status": "needs_review",
+            "error": f"No purchase order planned: {reason}. A buyer must review this SKU (e.g. raise the budget, "
+                     "accept a quality exception, or add a supplier).",
+            "budget": knowledge_result.get("budget"),
+            "reasoning": [f"Knowledge Agent could not find any supplier plan meeting all constraints: {reason}."],
+        }
     if required_quantity and knowledge_result.get("split_order") and knowledge_result.get("allocations"):
         plan = build_split_plan(
             conn, sku_fact, knowledge_result["allocations"],

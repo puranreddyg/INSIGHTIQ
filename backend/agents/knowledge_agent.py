@@ -36,6 +36,7 @@ from __future__ import annotations
 
 from backend.agents import procurement_search
 from backend.config import (
+    MIN_SPLIT_LINE_QTY,
     RULE_HIGH_RISK_DEFECT_RATE,
     SEARCH_MAX_SUPPLIERS,
     RULE_MIN_EVIDENCE_POS,
@@ -295,83 +296,105 @@ def evaluate_supplier(candidate: dict, required_quantity: float, trace: list[dic
     return {**candidate, "supplier_status": final_status, "status_flags": statuses}
 
 
-def allocate_split_order(candidates: list[dict], required_quantity: float, trace: list[dict]) -> tuple[list[dict], list[dict], int]:
-    """Rule 6 (Multi-supplier order) — hybrid heuristic search (procurement_search.py).
-
-      R6  IF no single supplier can fulfil RequiredQty while meeting the quality rule
-          THEN search supplier combinations (best-first branch-and-bound guided by the
-          learned heuristic score) for the plan that covers RequiredQty with
-          C1 capacity, C3 quantity-weighted predicted defect rate <= 5%, C4 <= 3 suppliers,
-          using the fewest High Risk suppliers, then the best score.
-          IF even all suppliers together lack capacity, order everything available
-          (PARTIAL) and report the shortfall.
-
-    Returns (allocations, unallocated, shortfall); the search summary is attached to
-    the first allocation under "search" and logged in the trace.
-    """
-    required = int(required_quantity)
+def _risky_ids(candidates: list[dict]) -> tuple[set[str], dict[str, str]]:
     scratch: list[dict] = []
     status_by_id = {c["supplier_id"]: evaluate_supplier(c, 0, scratch)["supplier_status"] for c in candidates}
-    risky = {sid for sid, st in status_by_id.items() if st == "High Risk"}
-    result = procurement_search.search(candidates, required, risky)
+    return {sid for sid, st in status_by_id.items() if st == "High Risk"}, status_by_id
+
+
+def allocate_split_order(candidates: list[dict], required_quantity: float, trace: list[dict],
+                         budget: float | None = None) -> tuple[list[dict], list[dict], int]:
+    """Rule 6 (Multi-supplier order) — hybrid heuristic search (procurement_search.py).
+
+      R6  IF no single supplier meets capacity, quality AND budget
+          THEN search supplier combinations for a plan meeting ALL hard constraints:
+          capacity (>= MIN_SPLIT_LINE_QTY per line), full quantity, weighted predicted
+          defect rate <= 5%, total cost <= budget, <= SEARCH_MAX_SUPPLIERS suppliers.
+          IF even all suppliers together lack capacity: buy the most that still meets
+          quality, budget and size (PARTIAL) and report the shortfall.
+          IF no plan meets the constraints: no split (status "infeasible").
+
+    Returns (allocations, unallocated, shortfall). allocations is empty when infeasible;
+    the search summary (or failure reason) is attached under allocations[0]["search"] /
+    the trace.
+    """
+    required = int(required_quantity)
+    risky, status_by_id = _risky_ids(candidates)
+    combined = sum(int(c["available_qty"]) for c in candidates)
+    if combined >= required:
+        result = procurement_search.search(candidates, required, risky, budget)
+    else:
+        result = procurement_search.partial(candidates, required, risky, budget)
+    status = result["status"]
     plan_shares = result["shares"]
     chosen_ids = {c["supplier_id"] for c, _ in plan_shares}
     unallocated = [{**c, "supplier_status": status_by_id[c["supplier_id"]]} for c in candidates if c["supplier_id"] not in chosen_ids]
-
     covered = sum(q for _, q in plan_shares)
-    combined = sum(int(c["available_qty"]) for c in candidates)
     shortfall = int(result["shortfall"])
-    status = result["status"]
-    w_def = result["weighted_defect_rate"]
-    summary_text = {
-        "full": (f"No single supplier can fulfil RequiredQty({required}) within the quality rule — the search found "
-                 f"{len(plan_shares)} supplier(s) that together cover it with predicted defect rate "
-                 f"{w_def:.2%} <= {RULE_HIGH_RISK_DEFECT_RATE:.0%}."),
-        "quality_relaxed": (f"No combination of suppliers keeps the predicted defect rate within "
-                            f"{RULE_HIGH_RISK_DEFECT_RATE:.0%}; the lowest-defect plan that covers RequiredQty({required}) "
-                            f"is used ({w_def:.2%}) and flagged for review."),
-        "partial": (f"Even all {len(candidates)} suppliers together have only {combined} units of capacity. Planning a "
-                    f"PARTIAL order of {covered} units; shortfall {shortfall} units must be sourced elsewhere."),
-    }[status]
+    budget_txt = f"cost <= ₹{budget:,.2f}" if budget is not None else "no budget limit"
+    if status == "full":
+        text = (f"No single supplier meets every constraint for RequiredQty({required}) — the search found "
+                f"{len(plan_shares)} suppliers that together do: defect rate {result['weighted_defect_rate']:.2%} <= "
+                f"{RULE_HIGH_RISK_DEFECT_RATE:.0%}, cost ₹{result['total_cost']:,.2f} ({budget_txt}).")
+    elif status == "partial":
+        text = (f"Even all {len(candidates)} suppliers together have only {combined} units. The most that can be bought "
+                f"within quality and budget is {covered} units (PARTIAL); shortfall {shortfall} units.")
+    else:
+        text = f"No supplier combination can be used: {result['reason']}. The order is NOT split."
     trace.append({
         "type": "rule", "ruleId": 6,
-        "name": {"full": "Multi-Supplier Order", "quality_relaxed": "Multi-Supplier Order (quality relaxed)",
-                 "partial": "Partial Multi-Supplier Order"}[status],
+        "name": {"full": "Multi-Supplier Order", "partial": "Partial Multi-Supplier Order",
+                 "infeasible": "Multi-Supplier Order (constraints cannot be met)"}[status],
         "entity": "Order",
-        "ifText": "IF no single supplier can fulfil RequiredQty within the quality rule",
-        "thenText": ("THEN search supplier combinations: capacity per supplier, quantity covered, "
-                     f"weighted defect rate <= {RULE_HIGH_RISK_DEFECT_RATE:.0%}, at most {SEARCH_MAX_SUPPLIERS} suppliers, "
-                     "fewest High Risk, best learned heuristic score"),
+        "ifText": "IF no single supplier meets capacity, quality and budget",
+        "thenText": (f"THEN search supplier combinations meeting ALL of: capacity (>= {MIN_SPLIT_LINE_QTY} per line), full quantity, "
+                     f"weighted defect rate <= {RULE_HIGH_RISK_DEFECT_RATE:.0%}, {budget_txt}, <= {SEARCH_MAX_SUPPLIERS} suppliers"),
         "elseText": None,
-        "conditions": [
-            _condition("Combined AvailableQty", combined, ">=", required, combined >= required),
-            _condition("Weighted DefectRate", round(w_def, 4), "<=", RULE_HIGH_RISK_DEFECT_RATE, result["meets_quality"]),
-        ],
-        "logic": "AND", "matched": True,
-        "outcome": {"full": "Split Order", "quality_relaxed": "Split Order (quality flagged)", "partial": "Partial Order"}[status],
-        "text": (f"✓ Rule Evaluated → {summary_text} Search expanded {result['nodes_expanded']} nodes, "
-                 f"evaluated {result['plans_evaluated']} complete plans, pruned {result['nodes_pruned']}.  [Rule 6: MATCHED]"),
+        "conditions": [_condition("Combined AvailableQty", combined, ">=", required, combined >= required)],
+        "logic": None, "matched": status != "infeasible",
+        "outcome": {"full": "Split Order", "partial": "Partial Order", "infeasible": "No Split"}[status],
+        "text": (f"✓ Rule Evaluated → {text} Search expanded {result['nodes_expanded']} nodes, evaluated "
+                 f"{result['plans_evaluated']} supplier sets, pruned {result['nodes_pruned']}.  "
+                 f"[Rule 6: {'MATCHED' if status != 'infeasible' else 'not matched'}]"),
     })
-
     allocations: list[dict] = []
     for order, (c, share) in enumerate(plan_shares, start=1):
         annotated = evaluate_supplier(c, share, trace)
         annotated["allocated_qty"] = share
         annotated["allocation_order"] = order
         allocations.append(annotated)
+    summary = {k: result.get(k) for k in ("status", "reason", "nodes_expanded", "nodes_pruned", "plans_evaluated", "constraints")}
     if allocations:
-        allocations[0]["search"] = {
-            "status": status, "weighted_defect_rate": round(w_def, 4), "weighted_otif": round(result["weighted_otif"], 4),
-            "meets_quality": result["meets_quality"], "nodes_expanded": result["nodes_expanded"],
-            "nodes_pruned": result["nodes_pruned"], "plans_evaluated": result["plans_evaluated"],
-            "constraints": result["constraints"],
-        }
-
-    summary = " + ".join(f"{a['supplier_id']} {a['allocated_qty']}" for a in allocations) + f" = {covered} units"
-    if shortfall:
-        summary += f" (shortfall {shortfall})"
-    trace.append(_decision_entry(None, None, f"Split order: {summary}", f"✓ Decision Made → Split order: {summary}"))
+        summary.update({"weighted_defect_rate": round(result["weighted_defect_rate"], 4),
+                        "weighted_otif": round(result["weighted_otif"], 4), "total_cost": result["total_cost"],
+                        "meets_quality": result["weighted_defect_rate"] <= RULE_HIGH_RISK_DEFECT_RATE + 1e-9,
+                        "meets_budget": budget is None or result["total_cost"] <= budget + 0.01})
+        allocations[0]["search"] = summary
+        line = " + ".join(f"{a['supplier_id']} {a['allocated_qty']}" for a in allocations) + f" = {covered} units"
+        if shortfall:
+            line += f" (shortfall {shortfall})"
+        trace.append(_decision_entry(None, None, f"Split order: {line}", f"✓ Decision Made → Split order: {line}"))
+    else:
+        unallocated = [{**c, "supplier_status": status_by_id[c["supplier_id"]]} for c in candidates]
+        unallocated and unallocated[0].setdefault("_search_failure", summary)
     return allocations, unallocated, shortfall
+
+
+def _budget_rule(c: dict, required: float, budget: float | None, trace: list[dict]) -> bool:
+    """R7 Budget: the supplier's cost for the whole order must fit the budget."""
+    if budget is None:
+        return True
+    cost = round(required * float(c.get("unit_cost") or 0), 2)
+    ok = cost <= budget + 0.01
+    trace.append(_rule_entry(
+        rule_id=7, name="Budget Check", entity=c["supplier_id"],
+        if_text="IF RequiredQty x UnitCost <= Budget", then_text="THEN within budget",
+        else_text="ELSE over budget (cannot be the sole supplier)",
+        conditions=[_condition("OrderCost", cost, "<=", budget, ok)], logic=None, matched=ok,
+        outcome=None if ok else "Over Budget",
+        text=f"✓ Rule Evaluated → IF OrderCost(₹{cost:,.2f}) <= Budget(₹{budget:,.2f})  [Rule 7: {'MATCHED' if ok else 'not matched'}]",
+    ))
+    return ok
 
 
 def run(perception_result: dict, supplier_result: dict) -> dict:
@@ -383,77 +406,79 @@ def run(perception_result: dict, supplier_result: dict) -> dict:
         inventory_state = evaluate_inventory_state(focus_facts[0], trace)
 
     required = supplier_result.get("required_quantity", 0)
-    split_mode = bool(
-        not supplier_result.get("ranked_candidates")
-        and (supplier_result.get("split_order_possible") or supplier_result.get("partial_order_possible"))
-        and supplier_result.get("split_candidates")
-    )
+    budget = supplier_result.get("budget")
+    pool = supplier_result.get("pool_candidates") or supplier_result.get("split_candidates") or []
+
+    annotated_candidates = [evaluate_supplier(c, required, trace) for c in supplier_result.get("ranked_candidates", [])]
+    ineligible_candidates = [evaluate_supplier(c, required, trace) for c in supplier_result.get("ineligible_suppliers", [])]
 
     allocations: list[dict] = []
     backup_candidates: list[dict] = []
     shortfall = 0
-    if split_mode:
-        # No single supplier is eligible, so the single-supplier capacity rule (R5) is
-        # not applied to the pool as a whole; each allocated share is checked instead.
-        allocations, backup_candidates, shortfall = allocate_split_order(supplier_result["split_candidates"], required, trace)
-        annotated_candidates = allocations
-        ineligible_candidates: list[dict] = []
-    else:
-        annotated_candidates = [
-            evaluate_supplier(c, required, trace) for c in supplier_result.get("ranked_candidates", [])
-        ]
-        ineligible_candidates = [
-            evaluate_supplier(c, required, trace) for c in supplier_result.get("ineligible_suppliers", [])
-        ]
+    split_mode = False
+    decision = "no_action"
+    review_reason = None
+    quality_ok = budget_ok = True
+    recommended = None
 
-    # Every supplier that could cover the order alone breaks the quality rule (High Risk):
-    # before settling for one of them, search for a combination that meets it.
-    pool = supplier_result.get("pool_candidates") or []
-    if (not split_mode and annotated_candidates and pool and len(pool) > 1
-            and all(c["supplier_status"] == "High Risk" for c in annotated_candidates)):
-        scratch_trace: list[dict] = []
-        trial, trial_spare, trial_short = allocate_split_order(pool, required, scratch_trace)
-        if trial and trial[0]["search"]["status"] == "full":
-            trace.append(_decision_entry(
-                None, None,
-                "Every supplier able to cover the order alone is High Risk — combining suppliers meets the quality rule instead",
-                "✓ Decision Made → Every supplier able to cover the order alone is High Risk — searching supplier combinations",
-            ))
-            trace.extend(scratch_trace)
-            split_mode, allocations, backup_candidates, shortfall = True, trial, trial_spare, trial_short
+    if annotated_candidates:
+        # a single supplier is chosen only if it meets capacity (R5), quality (not High Risk) AND budget (R7)
+        within = {c["supplier_id"]: (_budget_rule(c, required, budget, trace) if required else True)
+                  for c in annotated_candidates}
+        recommended = next((c for c in annotated_candidates
+                            if c["supplier_status"] != "High Risk" and within[c["supplier_id"]]), None)
+        if recommended is not None:
+            decision = "single"
+
+    if required and recommended is None and pool:
+        allocations, backup_candidates, shortfall = allocate_split_order(pool, required, trace, budget)
+        if allocations:
+            split_mode = True
+            decision = "partial" if shortfall else "split"
+            recommended = allocations[0]
             annotated_candidates = allocations
+            ineligible_candidates = []
+        elif annotated_candidates:
+            # No split meets every constraint, but some supplier can cover the order alone:
+            # choose the smallest violation (quality first, then budget) and flag it for review.
+            def violation(c):
+                d = max(0.0, float(c.get("defect_rate") or 1.0) - RULE_HIGH_RISK_DEFECT_RATE)
+                over = max(0.0, required * float(c.get("unit_cost") or 0) - (budget if budget is not None else float("inf")))
+                return (round(d, 6), over, c.get("rank", 0))
+            recommended = min(annotated_candidates, key=violation)
+            quality_ok = recommended["supplier_status"] != "High Risk"
+            budget_ok = budget is None or required * float(recommended["unit_cost"]) <= budget + 0.01
+            decision = "single_flagged"
+            failed = [n for n, ok in (("quality", quality_ok), ("budget", budget_ok)) if not ok]
+            text = (f"No supplier or combination meets every constraint — choosing {recommended['supplier_id']}, the smallest "
+                    f"violation ({', '.join(failed)} not met); flagged for review")
+            trace.append(_decision_entry(None, None, text, f"✓ Decision Made → {text}"))
+        else:
+            failure = (backup_candidates[0].get("_search_failure") if backup_candidates else None) or {}
+            review_reason = failure.get("reason") or "no supplier plan meets the constraints"
+            decision = "needs_review"
+            quality_ok = budget_ok = False
+            text = f"No supplier plan meets the constraints ({review_reason}) — order needs manual review."
+            trace.append(_decision_entry(None, None, text, f"✓ Decision Made → {text}"))
+    elif required and not annotated_candidates and not pool:
+        decision = "needs_review"
+        review_reason = "no supplier has known capacity for this SKU"
+        trace.append(_decision_entry(None, None, review_reason, f"✓ Decision Made → {review_reason}"))
+
+    for c in backup_candidates:
+        c.pop("_search_failure", None)
+    if split_mode and allocations:
+        srch = allocations[0].get("search", {})
+        quality_ok, budget_ok = bool(srch.get("meets_quality", True)), bool(srch.get("meets_budget", True))
 
     preferred = [c for c in annotated_candidates if c["supplier_status"] == "Preferred"]
     high_risk = [c for c in annotated_candidates if c["supplier_status"] == "High Risk"]
 
-    if split_mode:
-        # The lead supplier of a split order is the first allocation (largest priority).
-        recommended = allocations[0] if allocations else None
-    else:
-        recommended = next((c for c in annotated_candidates if c["supplier_status"] != "High Risk"), None)
-    quality_ok = True
-    if split_mode and allocations:
-        quality_ok = bool(allocations[0].get("search", {}).get("meets_quality", True))
-    if recommended is None and annotated_candidates:
-        # Nothing meets the quality rule, alone or combined: take the supplier with the
-        # LOWEST predicted defect rate (smallest violation), not simply the top score.
-        recommended = min(annotated_candidates, key=lambda c: (float(c.get("defect_rate") or 1.0), c.get("rank", 0)))
-        quality_ok = False
-        text = (f"No supplier or combination meets the {RULE_HIGH_RISK_DEFECT_RATE:.0%} defect rule — choosing "
-                f"{recommended['supplier_id']}, the lowest predicted defect rate ({float(recommended['defect_rate']):.1%}); "
-                "flagged for quality review")
-        trace.append(_decision_entry(None, None, text, f"✓ Decision Made → {text}"))
-    elif not annotated_candidates and supplier_result.get("no_eligible_supplier"):
-        combined = supplier_result.get("combined_available_qty", 0)
-        text = (
-            f"No supplier can fulfil RequiredQty({required}) and no candidate has any capacity "
-            f"(combined availability = {combined}) — no supplier selected."
-        )
-        trace.append(_decision_entry(None, None, text, f"✓ Decision Made → {text}"))
-
     return {
         "agent": "Knowledge Agent",
         "inventory_state": inventory_state,
+        "decision": decision,  # single | split | partial | single_flagged | needs_review | no_action
+        "review_reason": review_reason,
         "split_order": split_mode,
         "partial_order": bool(split_mode and shortfall > 0),
         "shortfall_qty": shortfall,
@@ -464,7 +489,8 @@ def run(perception_result: dict, supplier_result: dict) -> dict:
         "preferred_suppliers": preferred,
         "high_risk_suppliers": high_risk,
         "recommended_supplier": recommended,
-        # False when the plan could not keep the predicted defect rate within the rule (flag for review)
+        "budget": budget,
         "quality_constraint_met": quality_ok,
+        "budget_constraint_met": budget_ok,
         "reasoning_trace": trace,
     }

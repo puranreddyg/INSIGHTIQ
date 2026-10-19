@@ -18,7 +18,7 @@ from backend.agents import knowledge_agent, perception_agent, planning_agent, su
 PIPELINE_STAGES = ["Perception Agent", "Supplier Intelligence Agent", "Knowledge Agent", "Planning Agent"]
 
 
-def run_pipeline(conn: sqlite3.Connection, sku_id: Optional[str] = None) -> dict:
+def run_pipeline(conn: sqlite3.Connection, sku_id: Optional[str] = None, budget: Optional[float] = None) -> dict:
     started_at = datetime.now().isoformat()
     stage_log: list[dict] = []
 
@@ -45,7 +45,7 @@ def run_pipeline(conn: sqlite3.Connection, sku_id: Optional[str] = None) -> dict
     focus_sku = focus["sku_id"] if focus else sku_id
 
     t1 = time.perf_counter()
-    supplier_result = supplier_agent.run(conn, sku_id=focus_sku, required_quantity=required)
+    supplier_result = supplier_agent.run(conn, sku_id=focus_sku, required_quantity=required, budget=budget)
     if supplier_result.get("partial_order_possible"):
         supplier_summary = (
             f"Even all suppliers together ({supplier_result['combined_available_qty']} units) cannot cover {required}; "

@@ -252,6 +252,7 @@ function switchView(view, opts = {}) {
   if (view === "pipeline") loadPipelineView(opts.skuId);
   if (view === "suppliers") loadSuppliersView();
   if (view === "action") loadActionView();
+  if (view === "forecast") loadForecastView();
 }
 
 document.getElementById("main-nav").addEventListener("click", (e) => {
@@ -681,6 +682,10 @@ function renderPipelineResult(result) {
               <div class="text-xs text-body">${fmtCurrency(rec.unit_cost)}/unit · ${fmtDays(rec.lead_time_days)}d predicted lead${aiBadge("Promised ${rec.promised_lead_time_days}d + predicted delay — Learned by the supplier model from 5,027 purchase-order outcomes")} · ${pct(rec.defect_rate, 1)} defects${aiBadge("Learned by the supplier model from 5,027 purchase-order outcomes")} · ${fmtNum(rec.available_qty)} available${estBadge()} · Score ${rec.heuristic_score?.toFixed?.(1) ?? rec.heuristic_score}</div>
             </div>
             <span class="badge ${statusBadgeClass(rec.supplier_status)}">${esc(rec.supplier_status)}</span>
+          </div>` : plan?.status === "needs_review" ? `
+          <div class="border border-soft rounded-lg p-3 text-sm">
+            <div class="font-medium text-danger">Needs manual review — no order is split or placed</div>
+            <div class="text-xs text-body mt-1">${esc(result.knowledge.review_reason || "")}. A split order is only allowed when every constraint (capacity, quality ≤ 5% defects, budget${plan.budget ? ` ₹${fmtNum(plan.budget)}` : ""}, ≤ 3 suppliers) is met.</div>
           </div>` : sup.no_eligible_supplier ? `
           <div class="border border-soft rounded-lg p-3 text-sm">
             <div class="font-medium text-danger">No supplier selected</div>
@@ -694,13 +699,14 @@ function renderPipelineResult(result) {
         <div class="grid grid-cols-2 gap-3 text-sm">
           <div><div class="text-xs text-muted">Order Qty</div><div class="font-medium text-heading tabular">${fmtNum(plan.order_quantity)}</div></div>
           <div><div class="text-xs text-muted">${plan.split_order ? "Order Complete By" : "Est. Arrival"}</div><div class="font-medium text-heading">${fmtDate(plan.estimated_arrival_date)}</div></div>
-          <div><div class="text-xs text-muted">Total Expense</div><div class="font-medium text-heading tabular">${fmtCurrency(plan.total_expense)}</div></div>
+          <div><div class="text-xs text-muted">Total Expense</div><div class="font-medium tabular ${plan.budget_constraint_met === false ? "text-danger" : "text-heading"}">${fmtCurrency(plan.total_expense)}${plan.budget ? ` <span class="text-xs text-muted">/ budget ${fmtCurrency(plan.budget)}</span>` : ""}</div></div>
           <div><div class="text-xs text-muted">Backup Supplier</div><div class="font-medium text-heading">${esc(plan.backup_supplier_id || "—")}</div></div>
           ${plan.predictions ? `
           <div><div class="text-xs text-muted">Expected Usable Units ${aiBadge("Order quantity minus predicted defects and short shipments")}</div><div class="font-medium text-heading tabular">${fmtNum(plan.predictions.expected_good_units)} <span class="text-xs text-muted">(${pct(plan.predictions.expected_defect_rate, 1)} defects)</span></div></div>
           <div><div class="text-xs text-muted">On-time Probability ${aiBadge()}</div><div class="font-medium text-heading tabular">${pct(plan.predictions.on_time_probability)}</div></div>` : ""}
         </div>
-        ${plan.quality_constraint_met === false ? `<p class="text-xs font-medium text-danger mt-2">Quality flag: no supplier or combination keeps the predicted defect rate within 5% — the lowest-defect option was chosen. Review before approving.</p>` : ""}
+        ${plan.quality_constraint_met === false ? `<p class="text-xs font-medium text-danger mt-2">Quality flag: no supplier or compliant combination keeps the predicted defect rate within 5% — the smallest violation was chosen. Review before approving.</p>` : ""}
+        ${plan.budget_constraint_met === false ? `<p class="text-xs font-medium text-danger mt-2">Budget flag: no compliant option fits the budget of ${fmtCurrency(plan.budget)}. Review before approving.</p>` : ""}
         ${plan.search ? `<p class="text-xs text-muted mt-2">Hybrid heuristic search: ${plan.search.plans_evaluated} supplier combinations evaluated, ${plan.search.nodes_pruned} pruned; constraints — capacity per supplier, full quantity, weighted defect ≤ ${pct(plan.search.constraints.max_defect_rate)}, ≤ ${plan.search.constraints.max_suppliers} suppliers.</p>` : ""}
         <button id="go-to-action" class="btn-primary w-full mt-4">Open in Action Hub →</button>
         ` : ""}
@@ -1541,8 +1547,8 @@ async function loadActionView() {
   if (!plan || plan.error || !focus) {
     root.innerHTML = `
       <div class="fade-in card p-10 text-center">
-        <h1 class="text-xl font-bold text-heading mb-2">No Active Procurement Plan</h1>
-        <p class="text-sm text-body mb-4">Run the Agent Pipeline for a SKU first to generate an action plan.</p>
+        <h1 class="text-xl font-bold text-heading mb-2">${plan?.status === "needs_review" ? `${esc(focus?.SKU || "")} needs manual review` : "No Active Procurement Plan"}</h1>
+        <p class="text-sm text-body mb-4">${plan?.error ? esc(plan.error) : "Run the Agent Pipeline for a SKU first to generate an action plan."}</p>
         <button class="btn-primary" onclick="switchView('pipeline')">Go to Agent Pipeline</button>
       </div>
       ${renderOrderHistory(history)}
@@ -1723,3 +1729,177 @@ function renderOrderHistory(history) {
 refreshSystemHealth();
 setInterval(refreshSystemHealth, 20000);
 switchView("dashboard", { immediate: true });
+
+
+// ---------------------------------------------------------------------------
+// Forecast Evaluation — actual vs baselines vs learned model (out-of-sample)
+// ---------------------------------------------------------------------------
+
+const FORECAST_STYLE = {
+  actual: (p) => ({ color: p.ink, dash: [], width: 1.6 }),
+  model: (p) => ({ color: p.series1, dash: [], width: 2.2 }),
+  ma28: (p) => ({ color: p.series2, dash: [6, 4], width: 1.8 }),
+  ma7: (p) => ({ color: p.series4, dash: [2, 3], width: 1.8 }),
+};
+
+// shades the test period behind the lines
+const testPeriodShade = {
+  id: "testPeriodShade",
+  beforeDatasetsDraw(chart, _args, opts) {
+    if (opts.startIndex == null) return;
+    const { ctx, chartArea, scales } = chart;
+    const x0 = scales.x.getPixelForValue(opts.startIndex);
+    ctx.save();
+    ctx.fillStyle = opts.color;
+    ctx.fillRect(x0, chartArea.top, chartArea.right - x0, chartArea.bottom - chartArea.top);
+    ctx.fillStyle = opts.textColor;
+    ctx.font = "11px sans-serif";
+    ctx.fillText("Test period (unseen by the model)", x0 + 6, chartArea.top + 14);
+    ctx.restore();
+  },
+};
+
+async function loadForecastView() {
+  const root = document.getElementById("view-forecast");
+  if (!state.forecast) state.forecast = { protocol: "rolling", sku: "" };
+  root.innerHTML = `<div class="space-y-6"><div class="skeleton h-7 w-80"></div><div class="card p-5"><div class="skeleton h-72 w-full"></div></div></div>`;
+  try {
+    await ensureSkus();
+    const data = await Api.forecastEvaluation(state.forecast.protocol, state.forecast.sku || null);
+    renderForecastView(data);
+  } catch (e) {
+    root.innerHTML = `<div class="card p-6 text-sm text-danger">Could not load the forecast evaluation: ${esc(e.message)}</div>`;
+  }
+}
+
+function forecastVerdict(d) {
+  const L = d.metrics.lane_daily, T = d.metrics.total_daily;
+  const better = (lvl, k, b) => lvl.model[k] < lvl[b][k];
+  const pctGain = (lvl, k, b) => Math.round((1 - lvl.model[k] / lvl[b][k]) * 100);
+  const parts = [];
+  if (better(T, "mae", "ma28") && better(T, "mae", "ma7")) {
+    parts.push(`On total daily demand the learned model's MAE is ${pctGain(T, "mae", "ma28")}% lower than the 28-day average and ${pctGain(T, "mae", "ma7")}% lower than the 7-day average.`);
+  } else {
+    parts.push("On total daily demand the learned model does NOT beat every baseline.");
+  }
+  if (better(L, "mae", "ma28") && better(L, "rmse", "ma28")) {
+    parts.push(`Per warehouse per day the gain is smaller (MAE ${pctGain(L, "mae", "ma28")}% lower than the 28-day average), because single-lane daily sales are dominated by random noise that no method can predict.`);
+  }
+  const mapeWorse = ["ma28", "ma7"].filter((b) => !better(L, "mape_pct", b));
+  if (mapeWorse.length) {
+    parts.push(`Exception: per-lane MAPE is slightly worse than the ${mapeWorse.map((b) => b === "ma28" ? "28-day" : "7-day").join(" and ")} average (${L.model.mape_pct}% vs ${mapeWorse.map((b) => L[b].mape_pct + "%").join(" / ")}). MAPE over-weights low-sales days (it divides by small actuals; ${L.model.mape_excluded_zero_days} zero-sales days are excluded), so MAE/RMSE/WAPE are the fairer per-lane measures.`);
+  }
+  parts.push("Why the model helps: it learned the yearly season (in the training data sales peak in spring, bottom out around September and then climb again) and the promotion lift, so it anticipates the change instead of lagging behind it like a moving average.");
+  return parts.join(" ");
+}
+
+function forecastMetricsTable(title, lvl, d) {
+  const rows = Object.keys(d.methods).map((m) => {
+    const x = lvl[m];
+    const best = (k) => Object.keys(d.methods).every((o) => lvl[o][k] >= x[k]);
+    const cell = (k, suffix = "") => `<td class="tabular ${best(k) ? "font-bold text-success" : ""}">${x[k]}${suffix}</td>`;
+    return `<tr><td class="font-medium text-heading">${esc(d.methods[m])}</td>${cell("mae")}${cell("rmse")}${cell("mape_pct", "%")}${cell("wape_pct", "%")}</tr>`;
+  }).join("");
+  return `
+    <div class="card p-0 overflow-hidden">
+      <div class="px-5 py-3 border-b border-soft"><h3 class="font-semibold text-heading text-sm">${esc(title)}</h3>
+        <p class="text-xs text-muted">n = ${fmtNum(lvl.model.n)} forecasts · bold = best · lower is better</p></div>
+      <div class="overflow-x-auto"><table class="table-clean w-full">
+        <thead><tr><th>Method</th><th>MAE (units)</th><th>RMSE (units)</th><th>MAPE</th><th>WAPE</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+    </div>`;
+}
+
+function renderForecastView(d) {
+  const root = document.getElementById("view-forecast");
+  const P = d.periods;
+  const skuOpts = [`<option value="">All SKUs (total of ${P.lanes} SKU-warehouse lanes)</option>`]
+    .concat(state.skusCache.map((s) => `<option value="${esc(s.sku_id)}" ${s.sku_id === state.forecast.sku ? "selected" : ""}>${esc(s.sku_id)} (sum of its warehouses)</option>`)).join("");
+  root.innerHTML = `
+    <div class="fade-in space-y-6">
+      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 class="page-title">Forecast Evaluation</h1>
+          <p class="text-sm text-body mt-1">Actual demand vs baseline forecasts vs the learned model, on data the model never saw.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <select id="fc-protocol" class="input-field">
+            <option value="rolling" ${d.protocol === "rolling" ? "selected" : ""}>Weekly re-forecast (refit every 7 days)</option>
+            <option value="fixed" ${d.protocol === "fixed" ? "selected" : ""}>Single forecast made on ${fmtDate(P.train[1])}</option>
+          </select>
+          <select id="fc-sku" class="input-field min-w-[220px]">${skuOpts}</select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        ${planStat("Data", `${fmtDate(P.data[0])} – ${fmtDate(P.data[1])}`)}
+        ${planStat("Training period", `${fmtDate(P.train[0])} – ${fmtDate(P.train[1])}`)}
+        ${planStat("Test period (unseen)", `${fmtDate(P.test[0])} – ${fmtDate(P.test[1])} · ${P.test_days} days`)}
+        ${planStat("Protocol", d.protocol === "rolling" ? `Refit + forecast every ${P.refit_every_days} days` : "One forecast, 1–91 days ahead")}
+      </div>
+
+      <div class="card p-5">
+        <h2 class="font-semibold text-heading">Daily demand — ${esc(d.series_scope)}</h2>
+        <p class="text-xs text-body mb-3">Black: actual units sold. Coloured lines: forecasts for the test period, each made only with data available at the time.</p>
+        <div class="h-80"><canvas id="chart-fc-full"></canvas></div>
+      </div>
+
+      <div class="card p-5">
+        <h2 class="font-semibold text-heading">Test period close-up (${fmtDate(P.test[0])} – ${fmtDate(P.test[1])})</h2>
+        <div class="h-80"><canvas id="chart-fc-test"></canvas></div>
+      </div>
+
+      ${d.sku_metrics ? forecastMetricsTable(`${state.forecast.sku}: daily total over its warehouses`, d.sku_metrics, d) : ""}
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        ${forecastMetricsTable("All SKUs — total daily demand", d.metrics.total_daily, d)}
+        ${forecastMetricsTable("Per SKU-warehouse lane, per day", d.metrics.lane_daily, d)}
+      </div>
+
+      <div class="card p-5 text-sm">
+        <h2 class="font-semibold text-heading mb-2">What the results show</h2>
+        <p class="text-body">${esc(forecastVerdict(d))}</p>
+        <p class="text-xs text-muted mt-3">MAE = mean absolute error; RMSE = root mean squared error (penalises big misses); MAPE = mean absolute percentage error (days with zero actual sales excluded); WAPE = total absolute error ÷ total actual. Baselines: mean of each lane's last 28 days (the app's previous method) and last 7 days, recomputed at each forecast origin. Future promotions are treated as unknown (historical promotion rate).</p>
+      </div>
+    </div>`;
+
+  document.getElementById("fc-protocol").addEventListener("change", (e) => { state.forecast.protocol = e.target.value; loadForecastView(); });
+  document.getElementById("fc-sku").addEventListener("change", (e) => { state.forecast.sku = e.target.value; loadForecastView(); });
+  renderForecastCharts(d);
+}
+
+function renderForecastCharts(d) {
+  const p = chartPalette();
+  const S = d.series, start = S.test_start_index;
+  const mk = (key, label, data) => {
+    const st = FORECAST_STYLE[key](p);
+    return { label, data, borderColor: st.color, backgroundColor: st.color, borderDash: st.dash, borderWidth: st.width,
+             pointRadius: 0, tension: 0.15, spanGaps: false };
+  };
+  const methods = Object.keys(d.methods);
+  const pad = (arr) => Array(start).fill(null).concat(arr);
+  const common = (shadeStart) => ({
+    responsive: true, maintainAspectRatio: false, animation: prefersReducedMotion() ? false : { duration: 500 },
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      legend: { labels: { color: p.inkSecondary, usePointStyle: true, pointStyle: "line" } },
+      tooltip: { callbacks: { label: (c) => c.parsed.y == null ? null : `${c.dataset.label}: ${c.parsed.y.toLocaleString()} units` } },
+      testPeriodShade: { startIndex: shadeStart, color: isDarkMode() ? "rgba(57,135,229,0.08)" : "rgba(42,120,214,0.06)", textColor: p.inkMuted },
+    },
+    scales: {
+      x: { ticks: { color: p.inkMuted, maxTicksLimit: 12, maxRotation: 0 }, grid: { display: false } },
+      y: { title: { display: true, text: "Units sold per day", color: p.inkMuted }, ticks: { color: p.inkMuted }, grid: { color: p.grid } },
+    },
+  });
+  destroyChart("fcFull");
+  charts.fcFull = new Chart(document.getElementById("chart-fc-full"), {
+    type: "line",
+    data: { labels: S.dates, datasets: [mk("actual", "Actual demand", S.actual), ...methods.map((m) => mk(m, d.methods[m], pad(S[m])))] },
+    options: common(start), plugins: [testPeriodShade],
+  });
+  destroyChart("fcTest");
+  charts.fcTest = new Chart(document.getElementById("chart-fc-test"), {
+    type: "line",
+    data: { labels: S.dates.slice(start), datasets: [mk("actual", "Actual demand", S.actual.slice(start)), ...methods.map((m) => mk(m, d.methods[m], S[m]))] },
+    options: common(null),
+  });
+}

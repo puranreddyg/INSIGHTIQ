@@ -11,9 +11,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+import threading
+
 from backend import config
 from backend.agents import coordinator_agent, perception_agent, supplier_agent
 from backend.database import TABLES_TO_BUILD, build_database, connect
+from backend.ml import forecast_evaluation
 from backend.ml.store import load_demand_model, load_supplier_meta
 
 APP_STARTED_AT = datetime.now()
@@ -31,6 +34,18 @@ app.add_middleware(
 @app.on_event("startup")
 def _startup() -> None:
     build_database(force=False)
+    threading.Thread(target=_warm_forecast_evaluation, daemon=True).start()
+
+
+def _warm_forecast_evaluation() -> None:
+    """The forecast comparison refits the model ~13 times; compute it once in the background."""
+    try:
+        with connect() as conn:
+            sc = _supply_chain_frame(conn)
+        for protocol in ("rolling", "fixed"):
+            forecast_evaluation.evaluate(sc, protocol)
+    except Exception:  # a failed warm-up only means the first request computes it
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +184,23 @@ def list_skus(q: Optional[str] = None, urgent_only: bool = False):
     return {"snapshot_date": as_of, "skus": rows}
 
 
+def _supply_chain_frame(conn) -> pd.DataFrame:
+    return pd.read_sql_query(
+        "SELECT date, sku_id, warehouse_id, units_sold, promotion_flag, order_quantity FROM supply_chain", conn)
+
+
+@app.get("/api/forecast-evaluation")
+def forecast_eval(protocol: str = "rolling", sku_id: Optional[str] = None):
+    """Out-of-sample comparison: actual demand vs baselines vs the learned model (Q4 2024 test period)."""
+    if protocol not in ("rolling", "fixed"):
+        raise HTTPException(status_code=422, detail="protocol must be 'rolling' or 'fixed'")
+    with connect() as conn:
+        if sku_id is not None:
+            _require_sku(conn, sku_id)
+        sc = _supply_chain_frame(conn)
+    return forecast_evaluation.evaluate(sc, protocol, sku_id)
+
+
 @app.get("/api/model")
 def model_card():
     """What the predictive layer learned and how well it forecasts (for the UI's model panel)."""
@@ -201,14 +233,15 @@ def list_products():
 # ---------------------------------------------------------------------------
 
 @app.post("/api/run-agent-pipeline")
-def run_agent_pipeline(sku_id: Optional[str] = None, product_id: Optional[int] = None):
+def run_agent_pipeline(sku_id: Optional[str] = None, product_id: Optional[int] = None,
+                       budget: Optional[float] = Query(None, gt=0)):
     if sku_id is None:
         if product_id is not None:
             raise HTTPException(status_code=410, detail=PRODUCT_ID_RETIRED)
         raise HTTPException(status_code=422, detail="sku_id is required")
     with connect() as conn:
         _require_sku(conn, sku_id)
-        return coordinator_agent.run_pipeline(conn, sku_id=sku_id)
+        return coordinator_agent.run_pipeline(conn, sku_id=sku_id, budget=budget)
 
 
 # ---------------------------------------------------------------------------

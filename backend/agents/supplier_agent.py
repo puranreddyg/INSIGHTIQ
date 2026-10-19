@@ -49,7 +49,7 @@ from typing import Mapping
 import numpy as np
 import pandas as pd
 
-from backend.config import FIELD_PROVENANCE, HEURISTIC_WEIGHTS, TOP_N_SUPPLIER_CANDIDATES
+from backend.config import BUDGET_TOLERANCE, FIELD_PROVENANCE, HEURISTIC_WEIGHTS, TOP_N_SUPPLIER_CANDIDATES
 
 # Component name -> weight key. Ordered for display.
 COMPONENT_WEIGHTS = {
@@ -209,15 +209,30 @@ def _candidate_records(scored: pd.DataFrame, weights: Mapping[str, float]) -> li
 # Public API
 # ---------------------------------------------------------------------------
 
+def order_budget(conn: sqlite3.Connection, sku_id: str, required_quantity: float, budget: float | None = None) -> dict:
+    """Budget for this order: the caller's, or required qty x the SKU's reference unit
+    cost (mean of its lane costs in the ledger) x (1 + BUDGET_TOLERANCE)."""
+    row = conn.execute("SELECT AVG(unit_cost) FROM sku_supplier_lanes WHERE sku_id = ?", (sku_id,)).fetchone()
+    ref = float(row[0]) if row and row[0] is not None else None
+    if budget is not None:
+        return {"budget": round(float(budget), 2), "source": "user", "reference_unit_cost": ref, "tolerance": None}
+    if ref is None or not required_quantity:
+        return {"budget": None, "source": "none", "reference_unit_cost": ref, "tolerance": BUDGET_TOLERANCE}
+    return {"budget": round(required_quantity * ref * (1 + BUDGET_TOLERANCE), 2), "source": "default",
+            "reference_unit_cost": round(ref, 4), "tolerance": BUDGET_TOLERANCE}
+
+
 def rank_suppliers(
     conn: sqlite3.Connection,
     sku_id: str,
     required_quantity: float = 0,
     top_n: int | None = TOP_N_SUPPLIER_CANDIDATES,
     weights: Mapping[str, float] | None = None,
+    budget: float | None = None,
 ) -> dict:
     weights = dict(weights or HEURISTIC_WEIGHTS)
     matrix = candidate_matrix(conn, sku_id)
+    budget_info = order_budget(conn, sku_id, required_quantity, budget)
     scorable, unscorable = _coerce_scoring_inputs(matrix)
 
     eligible = scorable[scorable["available_qty"] >= required_quantity]
@@ -277,6 +292,8 @@ def rank_suppliers(
         "backup_supplier": candidates[1] if len(candidates) > 1 else None,
         "weights": {name: weights[key] for name, key in COMPONENT_WEIGHTS.items()},
         "field_provenance": FIELD_PROVENANCE,
+        "budget": budget_info["budget"],
+        "budget_info": budget_info,
     }
 
 
@@ -285,5 +302,5 @@ def full_matrix(conn: sqlite3.Connection, sku_id: str) -> dict:
     return rank_suppliers(conn, sku_id, required_quantity=0, top_n=None)
 
 
-def run(conn: sqlite3.Connection, sku_id: str, required_quantity: float = 0) -> dict:
-    return rank_suppliers(conn, sku_id, required_quantity=required_quantity)
+def run(conn: sqlite3.Connection, sku_id: str, required_quantity: float = 0, budget: float | None = None) -> dict:
+    return rank_suppliers(conn, sku_id, required_quantity=required_quantity, budget=budget)

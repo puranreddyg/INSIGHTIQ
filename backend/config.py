@@ -66,5 +66,10 @@ TOP_N_SUPPLIER_CANDIDATES = 5
 
 # Hybrid heuristic search for multi-supplier orders (Knowledge Agent Rule 6)
 SEARCH_MAX_SUPPLIERS = 3            # at most this many purchase orders per request
+MIN_SPLIT_LINE_QTY = 50             # no supplier line in a split smaller than this (uneconomic PO)
+# Budget constraint: unless the caller sets one, an order may cost at most
+# required qty x the SKU's reference unit cost (mean of its lane costs in the ledger)
+# x (1 + BUDGET_TOLERANCE).
+BUDGET_TOLERANCE = 0.10
 # Quality constraint: the order's quantity-weighted predicted defect rate must not exceed
 # the same 5% High Risk threshold the rules use (no new number).
