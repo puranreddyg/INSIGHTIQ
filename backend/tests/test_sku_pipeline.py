@@ -134,8 +134,11 @@ def test_perception_detects_urgent_skus_from_the_latest_date(conn, urgent):
     assert perception_agent.snapshot_date(conn).startswith("2024-12-30")
     ids = {r["sku_id"] for r in urgent}
     # every SKU below the planner's static reorder point is still urgent; the forecast
-    # only ever ADDS SKUs whose coming demand the static point under-covers (SKU_27)
-    assert PLANNER_URGENT_SKUS <= ids and ids - PLANNER_URGENT_SKUS == {"SKU_27"}
+    # (demand x learned lead time) only ever ADDS SKUs the static point under-covers
+    assert PLANNER_URGENT_SKUS <= ids and len(ids) == 16
+    for r in urgent:
+        if r["sku_id"] not in PLANNER_URGENT_SKUS:
+            assert any(l["Inventory"] < l["ForecastReorderPoint"] for l in r["focus_lanes"])
     for r in urgent:
         assert r["RequiredQuantity"] > 0 and r["RequiredQuantity"] % config.ORDER_QUANTITY_ROUNDING == 0
         for lane in r["focus_lanes"]:
@@ -254,15 +257,54 @@ def test_split_order_covers_a_request_no_single_supplier_can(conn, urgent):
         assert plan["backup_supplier_id"] not in ids
 
 
-def test_split_uses_high_risk_suppliers_only_when_the_safe_ones_cannot_cover_it(conn, urgent):
-    for r in _blocked(conn, urgent):
-        lines = coordinator_agent.run_pipeline(conn, r["sku_id"])["planning"]["allocations"]
-        safe_before_risky = [l["supplier_status"] != "High Risk" for l in lines]
-        assert safe_before_risky == sorted(safe_before_risky, reverse=True)
-        pool = supplier_agent.full_matrix(conn, r["sku_id"])["ranked_candidates"]
-        safe_capacity = sum(c["available_qty"] for c in pool if c["defect_rate"] <= config.RULE_HIGH_RISK_DEFECT_RATE)
-        if any(l["supplier_status"] == "High Risk" for l in lines):
-            assert safe_capacity < r["RequiredQuantity"]
+def _brute_force_best(pool, required):
+    """Exhaustive check: (fewest High Risk, fewest suppliers) among plans meeting capacity,
+    quantity and the 5% weighted-defect rule. Filling lowest-defect first is the best a
+    set can do on quality, so a set is feasible iff that fill meets the rule."""
+    from itertools import combinations
+    cap = config.RULE_HIGH_RISK_DEFECT_RATE
+    best = None
+    for k in range(1, config.SEARCH_MAX_SUPPLIERS + 1):
+        for sub in combinations(pool, k):
+            if sum(c["available_qty"] for c in sub) < required:
+                continue
+            rem, bad = required, 0.0
+            for c in sorted(sub, key=lambda c: c["defect_rate"]):
+                q = min(c["available_qty"], rem); bad += q * c["defect_rate"]; rem -= q
+            if bad / required <= cap + 1e-12:
+                key = (sum(c["defect_rate"] > cap and c.get("evidence_pos", 0) >= config.RULE_MIN_EVIDENCE_POS for c in sub), k)
+                best = key if best is None or key < best else best
+    return best
+
+
+def test_every_plan_meets_the_constraints_or_proves_they_cannot_be_met(conn, urgent):
+    """End-to-end over every urgent SKU: capacity, quantity and quality constraints,
+    and optimality of the supplier combination against an exhaustive search."""
+    cap = config.RULE_HIGH_RISK_DEFECT_RATE
+    for r in urgent:
+        res = coordinator_agent.run_pipeline(conn, r["sku_id"])
+        plan, know, sup = res["planning"], res["knowledge"], res["supplier"]
+        assert plan["status"] == "planned", r["sku_id"]
+        pool = {c["supplier_id"]: c for c in sup["pool_candidates"]}
+        lines = ([(l["supplier_id"], l["quantity"]) for l in plan["allocations"]] if plan.get("split_order")
+                 else [(plan["primary_supplier_id"], plan["order_quantity"])])
+        assert all(0 < q <= pool[s]["available_qty"] for s, q in lines)                       # C1 capacity
+        assert sum(q for _, q in lines) + plan.get("shortfall_qty", 0) == r["RequiredQuantity"]  # C2 quantity
+        assert len(lines) <= max(config.SEARCH_MAX_SUPPLIERS, len(pool))                           # C4 size
+        w_def = sum(q * pool[s]["defect_rate"] for s, q in lines) / sum(q for _, q in lines)
+        assert plan["predictions"]["expected_defect_rate"] == pytest.approx(w_def, abs=1e-4)
+        best = _brute_force_best(list(pool.values()), r["RequiredQuantity"])
+        if plan["quality_constraint_met"]:
+            assert w_def <= cap + 1e-9, r["sku_id"]                                               # C3 quality
+            if plan.get("split_order") and not plan.get("partial_order"):
+                risky = sum(pool[s]["defect_rate"] > cap for s, _ in lines)
+                assert (risky, len(lines)) == best, (r["sku_id"], (risky, len(lines)), best)      # optimal
+        else:
+            assert best is None, r["sku_id"]  # flagged only when no combination can meet the rule
+            # and then the lowest-defect option was chosen
+            if not plan.get("split_order"):
+                eligible = [c for c in pool.values() if c["available_qty"] >= r["RequiredQuantity"]]
+                assert pool[lines[0][0]]["defect_rate"] == min(c["defect_rate"] for c in eligible)
 
 
 def test_split_allocation_unit_behaviour():
@@ -275,10 +317,11 @@ def test_split_allocation_unit_behaviour():
     allocs, spare, short = knowledge_agent.allocate_split_order(cands, 450, [])
     assert [(a["supplier_id"], a["allocated_qty"]) for a in allocs] == [("A", 300), ("C", 150)]
     assert [s["supplier_id"] for s in spare] == ["B"] and spare[0]["supplier_status"] == "High Risk" and short == 0
-    # 700 needs B; the smallest set containing it is A + B, filled in rank order
+    # 700 needs B. A + B (300 + 400) would be 6.6% defective, breaking the 5% rule, so the
+    # search adds C and gives B only what quality allows: 2% x 300 + 3% x 200 + 10% x 200 = 4.6%
     allocs, spare, short = knowledge_agent.allocate_split_order(cands, 700, [])
-    assert [(a["supplier_id"], a["allocated_qty"]) for a in allocs] == [("A", 300), ("B", 400)] and short == 0
-    assert [s["supplier_id"] for s in spare] == ["C"]
+    assert [(a["supplier_id"], a["allocated_qty"]) for a in allocs] == [("A", 300), ("B", 200), ("C", 200)] and short == 0
+    assert spare == [] and allocs[0]["search"]["weighted_defect_rate"] == pytest.approx(0.0457, abs=1e-4)
     # 1000 exceeds everyone together (950) -> partial order using every supplier, shortfall 50
     allocs, spare, short = knowledge_agent.allocate_split_order(cands, 1000, [])
     assert sum(a["allocated_qty"] for a in allocs) == 950 and short == 50 and spare == []
@@ -353,8 +396,8 @@ def test_capacity_rule_is_in_the_trace():
 def test_dashboard_is_sku_based(client):
     body = client.get("/api/dashboard").json()
     assert body["snapshot_date"] == "2024-12-30"
-    assert body["kpis"]["critical_low_stock_skus"] == len(body["alerts"]) == 12
-    assert body["kpi_provenance"]["avg_supplier_fulfillment_rate"] == "ESTIMATED"
+    assert body["kpis"]["critical_low_stock_skus"] == len(body["alerts"]) == 16
+    assert body["kpi_provenance"]["avg_supplier_fulfillment_rate"] == "LEARNED"
     assert all(a["sku_id"].startswith("SKU_") for a in body["alerts"])
     assert all(0 <= a["stockout_probability"] <= 1 and a["urgent_reasons"] for a in body["alerts"])
 
@@ -363,6 +406,7 @@ def test_pipeline_by_sku(client):
     body = client.post("/api/run-agent-pipeline?sku_id=SKU_2").json()
     assert body["sku_id"] == "SKU_2"
     assert body["supplier"]["field_provenance"]["available_qty"] == "ESTIMATED"
+    assert body["supplier"]["field_provenance"]["defect_rate"] == "LEARNED"
     assert "SIMULATED" not in str(body)
 
 

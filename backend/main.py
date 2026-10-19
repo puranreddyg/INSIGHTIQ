@@ -146,7 +146,7 @@ def dashboard():
     return {
         "snapshot_date": as_of,
         "kpis": kpis,
-        "kpi_provenance": {"avg_supplier_lead_time_days": "REAL", "avg_supplier_fulfillment_rate": "ESTIMATED",
+        "kpi_provenance": {"avg_supplier_lead_time_days": "REAL", "avg_supplier_fulfillment_rate": "LEARNED",
                            "critical_low_stock_skus": "MODEL"},
         "alerts": [_sku_summary(r, counts) for r in urgent],
         "forecast_accuracy": _forecast_accuracy(model),

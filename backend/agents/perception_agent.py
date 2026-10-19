@@ -6,10 +6,12 @@ Percepts:  `supply_chain` (Inventory_Level, Reorder_Point per SKU x warehouse on
            demand forecaster (backend/ml/demand_forecaster.py).
 Actions:   emits one procurement request per SKU for the downstream agents.
 
-Per warehouse lane, with L = lead time (days) and C = the lane's own replenishment
-cycle (median days between its historical orders):
+Per warehouse lane, with L = the LEARNED lead time of the lane's supplier (promised
+lead time + its predicted delay, backend/ml/supplier_model.py) and C = the lane's
+own replenishment cycle (median days between its historical orders):
 
-  forecast demand during lead time   D_L  ~ Normal(mu_L, sd_L)       (model)
+  forecast demand during lead time   D_L  ~ Normal(mu_L, sd_L)       (demand model)
+      sd_L also carries lead-time uncertainty: sqrt(sd_demand^2 + (daily demand * delay_sd)^2)
   forecast reorder point             ROP_f = mu_L + z * sd_L         (z = 95% service level)
   effective reorder point            ROP_e = max(planner Reorder_Point, ROP_f)
   urgent                             Inventory < ROP_e
@@ -48,28 +50,43 @@ def _normal_sf(x: np.ndarray) -> np.ndarray:
     return 0.5 * np.vectorize(math.erfc)(np.asarray(x, dtype=float) / math.sqrt(2.0))
 
 
+def _delay_columns(conn: sqlite3.Connection) -> str:
+    """Learned delay columns if the supplier profile has them; a feed without delivery
+    history means no known delay (the promised lead time is used as is)."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(supplier_sku_profile)")}
+    delay = "COALESCE(p.expected_delay_days, 0)" if "expected_delay_days" in cols else "0"
+    sd = "COALESCE(p.delay_sd, 0)" if "delay_sd" in cols else "0"
+    return f"{delay} AS expected_delay_days, {sd} AS delay_sd"
+
+
 def _lane_table(conn: sqlite3.Connection, as_of: str) -> pd.DataFrame:
     lanes = pd.read_sql_query(
         """SELECT s.sku_id, s.warehouse_id, s.supplier_id, s.inventory_level, s.reorder_point,
-                  l.lead_time_days, t.demand_scale, t.order_cadence_days, t.lot_size_median,
-                  t.trailing_mean_28d
+                  l.lead_time_days AS promised_lead_time_days, t.demand_scale, t.order_cadence_days,
+                  t.lot_size_median, t.trailing_mean_28d,
+                  {delay_cols}
            FROM supply_chain s
            JOIN sku_supplier_lanes l ON l.sku_id = s.sku_id AND l.warehouse_id = s.warehouse_id
            JOIN lane_stats t ON t.sku_id = s.sku_id AND t.warehouse_id = s.warehouse_id
-           WHERE s.date = ?""",
+           LEFT JOIN supplier_sku_profile p ON p.sku_id = s.sku_id AND p.supplier_id = s.supplier_id
+           WHERE s.date = ?""".format(delay_cols=_delay_columns(conn)),
         conn, params=(as_of,),
     )
     model = load_demand_model(conn)
     z = SERVICE_LEVEL_Z
+    lanes["lead_time_days"] = lanes.promised_lead_time_days + lanes.expected_delay_days
     lead = np.maximum(1, np.round(lanes.lead_time_days.to_numpy(float))).astype(int)
     cycle = np.maximum(1, np.round(lanes.order_cadence_days.to_numpy(float))).astype(int)
     scale = lanes.demand_scale.to_numpy(float)
     inv = lanes.inventory_level.to_numpy(float)
 
     mu_l = model.horizon_means(as_of, lead, scale)
-    sd_l = model.horizon_std(lead, scale)
     mu_lc = model.horizon_means(as_of, lead + cycle, scale)
-    sd_lc = model.horizon_std(lead + cycle, scale)
+    # delivery-time uncertainty adds (daily demand x delay sd)^2 to the demand variance
+    lt_var_l = (mu_l / lead * lanes.delay_sd.to_numpy(float)) ** 2
+    lt_var_lc = (mu_lc / (lead + cycle) * lanes.delay_sd.to_numpy(float)) ** 2
+    sd_l = np.sqrt(model.horizon_std(lead, scale) ** 2 + lt_var_l)
+    sd_lc = np.sqrt(model.horizon_std(lead + cycle, scale) ** 2 + lt_var_lc)
 
     lanes["lead_days"] = lead
     lanes["cycle_days"] = cycle
@@ -109,6 +126,8 @@ def _lane_fact(r) -> dict:
         "Urgent": bool(r.urgent),
         "UrgentReason": r.urgent_reason or None,
         "LeadTimeDays": int(r.lead_days),
+        "PromisedLeadTimeDays": int(r.promised_lead_time_days),
+        "PredictedDelayDays": round(float(r.expected_delay_days), 2),
         "OrderCycleDays": int(r.cycle_days),
         "ForecastLeadDemand": round(float(r.forecast_lead_demand), 1),
         "StockoutProbability": round(float(r.stockout_probability), 3),

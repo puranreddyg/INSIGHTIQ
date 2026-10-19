@@ -137,3 +137,82 @@ def test_vendor_link_must_name_real_entities(supply_chain, kpi, tmp_path):
     links.write_text(json.dumps({"SUP_1": "Nobody_Ltd"}))
     with pytest.raises(ValueError, match="not a vendor"):
         supplier_estimator.build_profile(supply_chain, kpi, links, tmp_path / "none.csv")
+
+
+# ---------------------------------------------------------------------------
+# Purchase-order outcomes (the dataset change) and the supplier performance model
+# ---------------------------------------------------------------------------
+
+from pathlib import Path  # noqa: E402
+
+from backend import config  # noqa: E402
+from backend.augmentation import purchase_order_outcomes as poo  # noqa: E402
+from backend.ml import supplier_model  # noqa: E402
+
+BACKUP = config.DATASET_DIR / "backup" / "original_2026-10-20"
+
+
+@pytest.fixture(scope="module")
+def outcomes():
+    return pd.read_csv(config.CSV_PATHS["po_outcomes"])
+
+
+@pytest.fixture(scope="module")
+def hidden():
+    return json.loads(poo.OUT_KEY.read_text())
+
+
+def test_original_files_are_backed_up_and_unchanged():
+    import hashlib
+    manifest = (BACKUP / "MANIFEST.sha256").read_text().splitlines()
+    assert len(manifest) == 7
+    for line in manifest:
+        digest, name = line.split("  ", 1)
+        name = name.removeprefix("./")
+        assert hashlib.sha256((BACKUP / name).read_bytes()).hexdigest() == digest, name
+        if name != "CHECKSUMS.sha256":
+            assert (BACKUP / name).read_bytes() == (config.DATASET_DIR / name).read_bytes(), name
+
+
+def test_outcomes_are_reproducible_and_consistent_with_the_ledger(supply_chain, outcomes):
+    assert poo.main(["--check"]) == 0
+    database._load_po_outcomes(supply_chain)  # raises if any row disagrees with the ledger
+    assert len(outcomes) == int((supply_chain.order_quantity > 0).sum()) == 5027
+
+
+def test_loader_rejects_outcomes_that_contradict_the_ledger(supply_chain, outcomes, tmp_path, monkeypatch):
+    bad = outcomes.copy()
+    bad.loc[0, "accepted_qty"] += 1
+    path = tmp_path / "po.csv"
+    bad.to_csv(path, index=False)
+    monkeypatch.setitem(config.CSV_PATHS, "po_outcomes", path)
+    with pytest.raises(ValueError, match="disagrees with the ledger"):
+        database._load_po_outcomes(supply_chain)
+
+
+def test_the_application_never_reads_the_answer_key():
+    root = Path(database.__file__).resolve().parent
+    for path in root.rglob("*.py"):
+        if "tests" in path.parts or "augmentation" in path.parts:
+            continue
+        assert "HIDDEN" not in path.read_text(encoding="utf-8"), path
+
+
+def test_supplier_model_recovers_the_hidden_supplier_quality(outcomes, hidden):
+    model = supplier_model.fit(outcomes)
+    sup = model["suppliers"].set_index("supplier_id")
+    truth = pd.DataFrame(hidden["suppliers"]).T
+    assert sup.defect_rate.rank().corr(truth.defect_rate.rank()) >= 0.9
+    assert sup.on_time_prob.rank().corr(truth.on_time_prob.rank()) >= 0.9
+    pairs = model["pairs"]
+    true_pair = np.array([hidden["pair_defect_rate"][f"{a}|{b}"] for a, b in zip(pairs.sku_id, pairs.supplier_id)])
+    assert np.abs(pairs.defect_rate.to_numpy() - true_pair).mean() < 0.005  # within half a percentage point
+
+
+def test_supplier_model_beats_the_average_supplier_baseline_on_unseen_orders(outcomes):
+    bt = supplier_model.backtest(outcomes)
+    assert bt["test_orders"] > 500
+    for metric in ("defect_mae_pp", "on_time_logloss", "delay_mae_days"):
+        assert bt[metric]["model"] < bt[metric]["baseline_average_supplier"], metric
+    assert bt["defect_mae_pp"]["model"] < 0.5 * bt["defect_mae_pp"]["baseline_average_supplier"]
+    assert bt["supplier_defect_rank_corr"] >= 0.9

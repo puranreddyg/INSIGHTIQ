@@ -69,6 +69,11 @@ RULE_INPUT_FIELDS = ["lead_time_days", "available_qty", "defect_rate", "fulfillm
 
 DISPLAY_DECIMALS = 3
 
+OPTIONAL_PROFILE_DEFAULTS = {
+    "fill_rate": 1.0, "on_time_prob": None, "expected_delay_days": 0.0, "delay_sd": 0.0,
+    "evidence_pos": 0, "capacity_orders": 0, "evidence_source": None,
+}
+
 
 # ---------------------------------------------------------------------------
 # Normalization primitives — collapse to a deterministic value when the pool
@@ -115,13 +120,17 @@ def candidate_matrix(conn: sqlite3.Connection, sku_id: str) -> pd.DataFrame:
         lane_count=("warehouse_id", "nunique"),
         warehouses=("warehouse_id", lambda s: ", ".join(sorted(s))),
     ).reset_index()
-    profile = pd.read_sql_query(
-        """SELECT supplier_id, available_qty, defect_rate, fulfillment_rate, defect_sd,
-                  evidence_pos, capacity_orders, evidence_source
-           FROM supplier_sku_profile WHERE sku_id = ?""",
-        conn, params=(sku_id,),
-    )
+    profile = pd.read_sql_query("SELECT * FROM supplier_sku_profile WHERE sku_id = ?", conn, params=(sku_id,))
+    profile = profile.drop(columns=["sku_id"], errors="ignore")
+    # Optional learned fields: a feed without delivery history means no known delay.
+    for col, default in OPTIONAL_PROFILE_DEFAULTS.items():
+        if col not in profile.columns:
+            profile[col] = default
     matrix = per_supplier.merge(profile, on="supplier_id", how="left")
+    # Delivery is judged on the LEARNED lead time: what the supplier promises plus the
+    # delay the model predicts for it. The promise itself is kept for display.
+    matrix["promised_lead_time_days"] = matrix["lead_time_days"]
+    matrix["lead_time_days"] = matrix["promised_lead_time_days"] + matrix["expected_delay_days"].fillna(0.0)
     matrix.insert(0, "sku_id", sku_id)
     return matrix
 
@@ -236,11 +245,12 @@ def rank_suppliers(
     # ranked (scores relative to that pool) so the Knowledge Agent can allocate
     # the order across suppliers. `ranked_candidates` stays empty: nobody is
     # recommended as a *sole* supplier.
-    split_candidates: list[dict] = []
-    if split_possible or partial_possible:
+    pool_candidates: list[dict] = []
+    if not scorable.empty:
         pool_scored = score_candidates(scorable, weights).sort_values("raw_score", ascending=False).reset_index(drop=True)
         pool_scored["rank"] = pool_scored.index + 1
-        split_candidates = _candidate_records(pool_scored, weights)
+        pool_candidates = _candidate_records(pool_scored, weights)
+    split_candidates = pool_candidates if (split_possible or partial_possible) else []
 
     return {
         "agent": "Supplier Intelligence Agent",
@@ -260,6 +270,8 @@ def rank_suppliers(
         "partial_order_possible": partial_possible,
         "shortfall_qty": int(max(0, required_quantity - combined)) if partial_possible else 0,
         "split_candidates": split_candidates,
+        # the whole scorable pool, ranked against itself — input to the multi-supplier search
+        "pool_candidates": pool_candidates,
         "ranked_candidates": candidates,
         "primary_supplier": candidates[0] if candidates else None,
         "backup_supplier": candidates[1] if len(candidates) > 1 else None,

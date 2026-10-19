@@ -325,8 +325,9 @@ def test_full_matrix_and_required_path_expose_identical_scoring_keys():
 
 def test_estimated_fields_are_labelled_in_the_response():
     prov = rank(SPREAD)["field_provenance"]
-    assert prov["available_qty"] == prov["defect_rate"] == prov["fulfillment_rate"] == "ESTIMATED"
-    assert prov["unit_cost"] == prov["lead_time_days"] == "REAL"
+    assert prov["available_qty"] == "ESTIMATED"
+    assert prov["defect_rate"] == prov["fulfillment_rate"] == prov["lead_time_days"] == "LEARNED"
+    assert prov["unit_cost"] == prov["promised_lead_time_days"] == "REAL"
 
 
 def test_a_supplier_without_its_own_evidence_is_never_labelled_high_risk():

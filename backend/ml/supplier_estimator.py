@@ -49,7 +49,8 @@ FINISHED_STATUSES = {"Delivered", "Partially Delivered", "Cancelled"}
 
 PROFILE_COLUMNS = [
     "sku_id", "supplier_id", "available_qty", "defect_rate", "fulfillment_rate",
-    "defect_sd", "evidence_pos", "capacity_orders", "evidence_source",
+    "fill_rate", "on_time_prob", "expected_delay_days", "delay_sd",
+    "evidence_pos", "capacity_orders", "evidence_source",
 ]
 
 
@@ -170,8 +171,45 @@ def demonstrated_capacity(supply_chain: pd.DataFrame) -> pd.DataFrame:
     return cap
 
 
+def learned_profile(supply_chain: pd.DataFrame, po_outcomes: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """Profile from the supplier performance model trained on purchase-order outcomes.
+    Capacity = largest quantity the supplier actually delivered for the SKU."""
+    from backend.ml import supplier_model
+
+    model = supplier_model.fit(po_outcomes)
+    pairs = supply_chain[["sku_id", "supplier_id"]].drop_duplicates()
+    cap = po_outcomes.groupby(["sku_id", "supplier_id"]).agg(
+        available_qty=("received_qty", "max"), capacity_orders=("po_id", "size")).reset_index()
+    prof = pairs.merge(cap, how="left").merge(model["pairs"], how="left", on=["sku_id", "supplier_id"])
+    prof["capacity_orders"] = prof.capacity_orders.fillna(0).astype(int)
+    prof.loc[prof.capacity_orders < config.MIN_ORDER_OBSERVATIONS_PER_PAIR, "available_qty"] = np.nan
+    prof = prof.rename(columns={"expected_delay": "expected_delay_days"})
+    prof["fulfillment_rate"] = prof.otif_prob
+    prof["evidence_pos"] = prof.orders.fillna(0).astype(int)
+    prof["evidence_source"] = "purchase_order_outcomes (learned)"
+    prof = prof.assign(_s=prof.sku_id.map(_num), _p=prof.supplier_id.map(_num)) \
+        .sort_values(["_s", "_p"]).drop(columns=["_s", "_p"]).reset_index(drop=True)
+    prof["available_qty"] = prof.available_qty.astype("Int64")
+    meta = {
+        "source": "purchase_order_outcomes",
+        "params": model["params"],
+        "backtest": supplier_model.backtest(po_outcomes),
+        "suppliers": model["suppliers"].set_index("supplier_id")[
+            ["orders", "defect_rate", "on_time_prob", "short_prob", "fill_rate", "expected_delay", "delay_sd"]
+        ].round(4).to_dict(orient="index"),
+        "capacity_basis": "largest quantity delivered per SKU-supplier pair (purchase_order_outcomes)",
+        "min_orders_per_pair": config.MIN_ORDER_OBSERVATIONS_PER_PAIR,
+    }
+    return prof[PROFILE_COLUMNS], meta
+
+
 def build_profile(supply_chain: pd.DataFrame, kpi: pd.DataFrame,
-                  links_path: Path = VENDOR_LINKS_PATH, outcomes_path: Path = OUTCOMES_PATH) -> tuple[pd.DataFrame, dict]:
+                  links_path: Path = VENDOR_LINKS_PATH, outcomes_path: Path = OUTCOMES_PATH,
+                  po_outcomes: pd.DataFrame | None = None) -> tuple[pd.DataFrame, dict]:
+    """Learned profile when purchase-order outcomes exist; otherwise the prior-based
+    estimate (real KPI baseline, updated by any evidence in DataSets/supplier_evidence/)."""
+    if po_outcomes is not None and not po_outcomes.empty:
+        return learned_profile(supply_chain, po_outcomes)
     suppliers = sorted(supply_chain.supplier_id.unique(), key=_num)
     priors = fit_priors(kpi)
     evidence = load_evidence(kpi, set(suppliers), links_path, outcomes_path)
@@ -180,6 +218,10 @@ def build_profile(supply_chain: pd.DataFrame, kpi: pd.DataFrame,
     profile = profile.assign(_s=profile.sku_id.map(_num), _p=profile.supplier_id.map(_num)) \
         .sort_values(["_s", "_p"]).drop(columns=["_s", "_p"]).reset_index(drop=True)
     profile["available_qty"] = profile.available_qty.astype("Int64")
+    profile["fill_rate"] = 1.0
+    profile["on_time_prob"] = profile.fulfillment_rate
+    profile["expected_delay_days"] = 0.0
+    profile["delay_sd"] = 0.0
     meta = {
         "priors": priors,
         "suppliers": per_supplier.set_index("supplier_id").round(6).to_dict(orient="index"),

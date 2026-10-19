@@ -48,3 +48,45 @@ When no single supplier can cover the required quantity:
 3. If even all suppliers together fall short, order everything available (a **partial order**) and report the shortfall.
 
 Nothing is planned only when no supplier has any known capacity at all.
+
+---
+
+# Update 2026-10-20: supplier performance learned from order outcomes
+
+## Predictions supported
+
+| Prediction | Original dataset | After the dataset change |
+|---|---|---|
+| Daily demand per SKU-warehouse | ✅ learned (14-day error 8.4% vs 17.2%) | ✅ same |
+| Stock-out risk, reorder point, order size | ✅ | ✅ also accounts for each supplier's predicted delay and its variability |
+| Supplier capacity | ⚠️ largest order (floor) | ⚠️ largest delivery (floor) |
+| Supplier defect rate | ❌ no data (every supplier on the same baseline, "Unrated") | ✅ learned per SKU-supplier |
+| On-time probability, expected delay, real lead time | ❌ all orders instant | ✅ learned |
+| Fill rate / short shipments | ❌ all orders complete | ✅ learned |
+| Preferred / High Risk / Reliable labels | ❌ never assigned | ✅ from learned values |
+
+## Supplier model (`backend/ml/supplier_model.py`)
+Hierarchical empirical Bayes (partial pooling SKU-supplier → supplier → all), with
+pooling strength estimated from the data. Backtest: trained on orders received before
+1 Oct 2024, tested on 865 later orders:
+
+| | Model | Average-supplier baseline |
+|---|---|---|
+| Defect rate error (pp) | 1.05 | 3.91 |
+| On-time log-loss | 0.489 | 0.516 |
+| Delay error (days) | 1.23 | 1.33 |
+| Supplier defect ranking vs actual | 0.988 rank correlation | — |
+
+## How each agent uses the models
+- **Perception:** reorder point and safety stock use the learned lead time (promised + predicted delay) and its uncertainty.
+- **Supplier:** heuristic scores use learned defect rate, on-time-in-full and lead time.
+- **Knowledge:** rules fire on learned values; Rule 6 runs the hybrid heuristic search (`backend/agents/procurement_search.py`) whenever no single supplier can cover the order within the quality rule.
+- **Planning:** arrival dates from learned lead times; reports expected usable units, on-time probability and a quality flag.
+
+## Hybrid heuristic search (Rule 6)
+Best-first branch-and-bound over supplier combinations, guided by the learned heuristic
+scores. Hard constraints: capacity per supplier, full quantity, quantity-weighted
+predicted defect rate ≤ 5%, at most 3 suppliers. Objective: fewest High Risk suppliers,
+then fewest suppliers, then highest score. An exhaustive test confirms it finds the
+optimum for every urgent SKU. If no combination can meet the 5% rule, the lowest-defect
+option is chosen and flagged; if capacity is short, a partial order reports the shortfall.

@@ -8,7 +8,7 @@ DB_PATH = DATA_DIR / "insightiq.db"
 FRONTEND_DIR = ROOT_DIR / "frontend"
 
 # Bumped whenever the derived schema changes; an older on-disk DB is rebuilt on startup.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 CSV_PATHS = {
     "product": DATASET_DIR / "archive (1)" / "product.csv",
@@ -17,6 +17,9 @@ CSV_PATHS = {
     "calendar": DATASET_DIR / "archive (1)" / "clander.csv",
     "procurement_kpi": DATASET_DIR / "Procurement KPI Analysis Dataset.csv",
     "supply_chain": DATASET_DIR / "supply_chain_dataset1.csv",
+    # The one dataset change: an outcome row per existing ledger replenishment
+    # (backend/augmentation/purchase_order_outcomes.py). Originals are untouched.
+    "po_outcomes": DATASET_DIR / "augmented" / "purchase_order_outcomes.csv",
 }
 
 # Provenance of every criterion the procurement agents read.
@@ -24,12 +27,14 @@ CSV_PATHS = {
 #   ESTIMATED  computed from real history by backend/ml/supplier_estimator.py (no random numbers);
 #              quality fields start at the real KPI average and move with real supplier evidence
 #   MODEL      predicted by the demand forecaster (backend/ml/demand_forecaster.py)
+#   LEARNED    predicted by the supplier performance model from purchase-order outcomes
 FIELD_PROVENANCE = {
     "unit_cost": "REAL",
-    "lead_time_days": "REAL",
-    "available_qty": "ESTIMATED",
-    "defect_rate": "ESTIMATED",
-    "fulfillment_rate": "ESTIMATED",
+    "promised_lead_time_days": "REAL",
+    "lead_time_days": "LEARNED",       # promised lead time + the supplier's predicted delay
+    "available_qty": "ESTIMATED",      # largest quantity this supplier has delivered for the SKU
+    "defect_rate": "LEARNED",
+    "fulfillment_rate": "LEARNED",     # predicted on-time-in-full probability
 }
 
 MIN_ORDER_OBSERVATIONS_PER_PAIR = 10
@@ -58,3 +63,8 @@ SERVICE_LEVEL_Z = 1.645  # 95% service level for safety stock / forecast reorder
 ORDER_CYCLE_FALLBACK_DAYS = 14  # used when a lane has too few historical orders to measure its cycle
 
 TOP_N_SUPPLIER_CANDIDATES = 5
+
+# Hybrid heuristic search for multi-supplier orders (Knowledge Agent Rule 6)
+SEARCH_MAX_SUPPLIERS = 3            # at most this many purchase orders per request
+# Quality constraint: the order's quantity-weighted predicted defect rate must not exceed
+# the same 5% High Risk threshold the rules use (no new number).

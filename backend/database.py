@@ -203,13 +203,46 @@ def _json_default(value):
     raise TypeError(type(value))
 
 
-def _build_models(supply_chain: pd.DataFrame, kpi: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    """Train the demand forecaster, derive per-lane stats, and estimate the supplier profile."""
+OUTCOME_COLUMNS = [
+    "po_id", "sku_id", "warehouse_id", "supplier_id", "order_date", "promised_date", "received_date",
+    "promised_lead_time_days", "actual_lead_time_days", "delay_days",
+    "ordered_qty", "received_qty", "accepted_qty", "rejected_qty", "short_qty", "order_status",
+]
+
+
+def _load_po_outcomes(supply_chain: pd.DataFrame) -> pd.DataFrame:
+    """Purchase-order outcomes, one per ledger replenishment. Rejected unless every row
+    matches a real replenishment exactly (same day, lane, supplier, accepted quantity,
+    promised lead time) and the quantities add up — so the ledger stays consistent."""
+    path = config.CSV_PATHS.get("po_outcomes")
+    if path is None or not path.exists():
+        return pd.DataFrame(columns=OUTCOME_COLUMNS)
+    df = pd.read_csv(path)
+    if list(df.columns) != OUTCOME_COLUMNS:
+        raise ValueError(f"purchase_order_outcomes columns {list(df.columns)} != {OUTCOME_COLUMNS}")
+    receipts = supply_chain[supply_chain.order_quantity > 0].assign(
+        received_date=lambda d: pd.to_datetime(d.date).dt.strftime("%Y-%m-%d"))[
+        ["received_date", "sku_id", "warehouse_id", "supplier_id", "order_quantity", "supplier_lead_time_days"]]
+    merged = df.merge(receipts, how="left", on=["received_date", "sku_id", "warehouse_id", "supplier_id"], indicator=True)
+    if (merged._merge != "both").any() or len(merged) != len(df) or len(df) != len(receipts):
+        raise ValueError("purchase_order_outcomes must have exactly one row per ledger replenishment")
+    if (merged.accepted_qty != merged.order_quantity).any() or (merged.promised_lead_time_days != merged.supplier_lead_time_days).any():
+        raise ValueError("purchase_order_outcomes disagrees with the ledger (accepted qty or promised lead time)")
+    ok = ((df.received_qty == df.accepted_qty + df.rejected_qty) & (df.ordered_qty == df.received_qty + df.short_qty)
+          & (df.actual_lead_time_days == df.promised_lead_time_days + df.delay_days)
+          & (df[["rejected_qty", "short_qty", "delay_days"]] >= 0).all(axis=1))
+    if not ok.all():
+        raise ValueError(f"purchase_order_outcomes has {int((~ok).sum())} rows whose quantities or dates do not add up")
+    return df
+
+
+def _build_models(supply_chain: pd.DataFrame, kpi: pd.DataFrame, po_outcomes: pd.DataFrame | None = None) -> dict[str, pd.DataFrame]:
+    """Train the demand forecaster, derive per-lane stats, and learn the supplier profile."""
     model = demand_forecaster.fit(supply_chain)
     lane_stats = demand_forecaster.lane_statistics(
         supply_chain, model, config.ORDER_CYCLE_FALLBACK_DAYS
     )
-    profile, supplier_meta = supplier_estimator.build_profile(supply_chain, kpi)
+    profile, supplier_meta = supplier_estimator.build_profile(supply_chain, kpi, po_outcomes=po_outcomes)
     models = pd.DataFrame([
         {"name": "demand_forecaster", "payload": model.to_json()},
         {"name": "supplier_estimator", "payload": json.dumps(supplier_meta, default=_json_default)},
@@ -228,6 +261,7 @@ def _build_models(supply_chain: pd.DataFrame, kpi: pd.DataFrame) -> dict[str, pd
 TABLES_TO_BUILD = [
     "products", "orders", "customers", "calendar", "procurement_kpi",
     "supply_chain", "sku_supplier_lanes", "supplier_sku_profile", "lane_stats", "ml_models",
+    "purchase_order_outcomes",
 ]
 
 # Removed in schema v2: built on an unsupported round-robin mapping of KPI
@@ -275,6 +309,7 @@ def build_database(force: bool = False) -> None:
 
     supply_chain = _load_supply_chain()
     kpi = _load_procurement_kpi()
+    po_outcomes = _load_po_outcomes(supply_chain)
     tables = {
         "products": _load_products(),
         "orders": _load_orders(),
@@ -283,7 +318,8 @@ def build_database(force: bool = False) -> None:
         "procurement_kpi": kpi,
         "supply_chain": supply_chain,
         "sku_supplier_lanes": _build_sku_supplier_lanes(supply_chain),
-        **_build_models(supply_chain, kpi),
+        "purchase_order_outcomes": po_outcomes,
+        **_build_models(supply_chain, kpi, po_outcomes),
     }
 
     with connect() as conn:

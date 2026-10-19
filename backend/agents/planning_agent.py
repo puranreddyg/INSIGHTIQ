@@ -197,6 +197,8 @@ def build_split_plan(
         lines.append({
             "supplier_id": a["supplier_id"],
             "supplier_status": a.get("supplier_status"),
+            "defect_rate": a.get("defect_rate"),
+            "on_time_prob": a.get("on_time_prob"),
             "quantity": qty,
             "available_qty": int(a["available_qty"]),
             "unit_cost": round(unit_cost, 2),
@@ -261,14 +263,56 @@ def build_split_plan(
     }
 
 
+def _add_predictions(plan: dict, lines: list[tuple[dict, int]], knowledge_result: dict) -> dict:
+    """Attach what the supplier model expects this plan to deliver."""
+    if plan.get("status") != "planned" or not lines:
+        return plan
+    def f(c, key, default):
+        v = c.get(key)
+        return default if v is None else float(v)
+    good = sum(q * f(c, "fill_rate", 1.0) * (1 - f(c, "defect_rate", 0.0)) for c, q in lines)
+    on_time_all = float(np.prod([f(c, "on_time_prob", 1.0) for c, _ in lines]))
+    qty = sum(q for _, q in lines)
+    w_def = sum(q * f(c, "defect_rate", 0.0) for c, q in lines) / qty
+    plan["predictions"] = {
+        "expected_good_units": int(round(good)),
+        "expected_defect_rate": round(w_def, 4),
+        "on_time_probability": round(on_time_all, 3),
+        "lines": [{
+            "supplier_id": c["supplier_id"],
+            "promised_lead_time_days": c.get("promised_lead_time_days"),
+            "predicted_delay_days": round(f(c, "expected_delay_days", 0.0), 2),
+            "predicted_lead_time_days": round(f(c, "lead_time_days", 0.0), 2),
+            "on_time_prob": round(f(c, "on_time_prob", 1.0), 3),
+            "defect_rate": round(f(c, "defect_rate", 0.0), 4),
+            "fill_rate": round(f(c, "fill_rate", 1.0), 4),
+        } for c, _ in lines],
+    }
+    plan["quality_constraint_met"] = bool(knowledge_result.get("quality_constraint_met", True))
+    plan["reasoning"].append(
+        f"Supplier model: of {qty} units ordered, about {int(round(good))} are expected to arrive usable "
+        f"(predicted defect rate {w_def:.1%}, short shipments included); probability that "
+        f"{'every line' if len(lines) > 1 else 'the order'} arrives on time = {on_time_all:.0%}. "
+        "Arrival dates use the learned lead time (promised + predicted delay)."
+    )
+    if not plan["quality_constraint_met"]:
+        plan["reasoning"].append(
+            "QUALITY FLAG: no supplier or combination keeps the predicted defect rate within the 5% rule — "
+            "the lowest-defect option was chosen; review before approving."
+        )
+    return plan
+
+
 def run(conn: sqlite3.Connection, sku_fact: dict | None, knowledge_result: dict, required_quantity: float,
         supplier_result: dict | None = None) -> dict:
     if required_quantity and knowledge_result.get("split_order") and knowledge_result.get("allocations"):
-        return build_split_plan(
+        plan = build_split_plan(
             conn, sku_fact, knowledge_result["allocations"],
             knowledge_result.get("backup_candidates", []), required_quantity,
             knowledge_result.get("shortfall_qty", 0),
         )
+        plan["search"] = knowledge_result["allocations"][0].get("search")
+        return _add_predictions(plan, [(a, a["allocated_qty"]) for a in knowledge_result["allocations"]], knowledge_result)
     primary = knowledge_result.get("recommended_supplier")
     candidates = knowledge_result.get("annotated_candidates", [])
     alternatives = [c for c in candidates if primary and c["supplier_id"] != primary["supplier_id"]]
@@ -280,4 +324,5 @@ def run(conn: sqlite3.Connection, sku_fact: dict | None, knowledge_result: dict,
         (c for c in alternatives if c.get("supplier_status") != "High Risk"),
         next(iter(alternatives), None),
     )
-    return build_plan(conn, sku_fact, primary, backup, required_quantity, supplier_result)
+    plan = build_plan(conn, sku_fact, primary, backup, required_quantity, supplier_result)
+    return _add_predictions(plan, [(primary, plan.get("order_quantity", 0))] if primary else [], knowledge_result)

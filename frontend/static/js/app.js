@@ -148,7 +148,7 @@ function statusBadgeClass(status) {
 }
 
 // Marks a value ESTIMATED from real history (backend/ml/supplier_estimator.py), not observed directly.
-function estBadge(title = "Estimated from real history — capacity = largest order this supplier has delivered; quality = real industry baseline until the supplier has records of its own") {
+function estBadge(title = "Estimated from real history — capacity = the largest quantity this supplier has actually delivered for this SKU") {
   return `<span class="badge-est" title="${esc(title)}">EST</span>`;
 }
 
@@ -157,8 +157,12 @@ function aiBadge(title = "Predicted by the demand-forecast model trained on 91,2
   return `<span class="badge-ai" title="${esc(title)}">AI</span>`;
 }
 
-function pct(p) {
-  return p == null ? "—" : `${Math.round(p * 100)}%`;
+function fmtDays(d) {
+  return d == null ? "—" : (+d).toFixed(1).replace(/\.0$/, "");
+}
+
+function pct(p, decimals = 0) {
+  return p == null ? "—" : `${(p * 100).toFixed(decimals)}%`;
 }
 
 function riskBadge(p) {
@@ -336,7 +340,7 @@ function renderDashboard(data) {
         ${kpiCard("Critical Low Stock SKUs", fmtNum(k.critical_low_stock_skus), "urgent", "Below the planner's or the AI-forecast reorder point")}
         ${kpiCard("Active Purchase Orders", fmtNum(k.active_purchase_orders), "info", "Approved & in flight")}
         ${kpiCard("Avg Supplier Lead Time", `${k.avg_supplier_lead_time_days ?? "—"}d`, "neutral", "Across all SKU-warehouse lanes")}
-        ${kpiCard("Avg Supplier Fulfillment", `${k.avg_supplier_fulfillment_rate ?? "—"}%`, "good", "Estimated: real industry baseline (no per-supplier records yet)")}
+        ${kpiCard("Avg Supplier Fulfillment", `${k.avg_supplier_fulfillment_rate ?? "—"}%`, "good", "Learned on-time-in-full rate, averaged over suppliers")}
       </div>
 
       ${data.forecast_accuracy ? forecastAccuracyCard(data.forecast_accuracy) : ""}
@@ -613,11 +617,12 @@ function splitAllocationsTable(lines) {
   return `
     <div class="overflow-x-auto mt-3">
       <table class="table-clean w-full">
-        <thead><tr><th>Supplier</th><th>Quantity</th><th>Unit Cost</th><th>Cost</th><th>Arrives</th><th>Status</th></tr></thead>
+        <thead><tr><th>Supplier</th><th>Quantity</th><th>Defects ${aiBadge("Learned defect rate")}</th><th>Unit Cost</th><th>Cost</th><th>Arrives</th><th>Status</th></tr></thead>
         <tbody>${lines.map((l) => `
           <tr>
             <td class="font-medium text-heading">${esc(l.supplier_id)}</td>
             <td class="tabular">${fmtNum(l.quantity)} <span class="text-muted">/ ${fmtNum(l.available_qty)}${estBadge()}</span></td>
+            <td class="tabular">${pct(l.defect_rate, 1)}</td>
             <td class="tabular">${fmtCurrency(l.unit_cost)}</td>
             <td class="tabular">${fmtCurrency(l.expense)}</td>
             <td>${fmtDate(l.estimated_arrival_date)}</td>
@@ -666,14 +671,14 @@ function renderPipelineResult(result) {
             <div class="font-medium text-heading">Order split across ${plan.allocations.length} suppliers</div>
             <div class="text-xs text-body mt-1">${plan.partial_order
               ? `Even all ${sup.pool_size} suppliers together can supply only ${fmtNum(sup.combined_available_qty)}${estBadge()} of the ${fmtNum(plan.required_quantity)} units needed, so every supplier is ordered to its capacity.`
-              : `No single supplier can supply ${fmtNum(sup.required_quantity)} units alone, but together they can (combined capacity ${fmtNum(sup.combined_available_qty)}${estBadge()}). The order uses the fewest suppliers that cover it — never a High Risk one if safe ones are enough — filled best-ranked first.`}</div>
+              : `No single supplier can supply ${fmtNum(sup.required_quantity)} units alone, but together they can (combined capacity ${fmtNum(sup.combined_available_qty)}${estBadge()}). The search picked the combination with the fewest High Risk suppliers, then the fewest suppliers, that keeps the order's predicted defect rate within 5%${plan.predictions ? ` (this plan: ${pct(plan.predictions.expected_defect_rate, 1)})` : ""}.`}</div>
             ${plan.partial_order ? `<div class="mt-2 text-xs font-medium text-danger">Shortfall: ${fmtNum(plan.shortfall_qty)} units still need a new supplier or a follow-up order.</div>` : ""}
             ${splitAllocationsTable(plan.allocations)}
           </div>` : rec ? `
           <div class="border border-soft rounded-lg p-3 text-sm flex items-center justify-between">
             <div>
               <div class="font-medium text-heading">${esc(rec.supplier_id)}</div>
-              <div class="text-xs text-body">${fmtCurrency(rec.unit_cost)}/unit · ${rec.lead_time_days}d lead · ${fmtNum(rec.available_qty)} available${estBadge()} · Score ${rec.heuristic_score?.toFixed?.(1) ?? rec.heuristic_score}</div>
+              <div class="text-xs text-body">${fmtCurrency(rec.unit_cost)}/unit · ${fmtDays(rec.lead_time_days)}d predicted lead${aiBadge("Promised ${rec.promised_lead_time_days}d + predicted delay — Learned by the supplier model from 5,027 purchase-order outcomes")} · ${pct(rec.defect_rate, 1)} defects${aiBadge("Learned by the supplier model from 5,027 purchase-order outcomes")} · ${fmtNum(rec.available_qty)} available${estBadge()} · Score ${rec.heuristic_score?.toFixed?.(1) ?? rec.heuristic_score}</div>
             </div>
             <span class="badge ${statusBadgeClass(rec.supplier_status)}">${esc(rec.supplier_status)}</span>
           </div>` : sup.no_eligible_supplier ? `
@@ -691,7 +696,12 @@ function renderPipelineResult(result) {
           <div><div class="text-xs text-muted">${plan.split_order ? "Order Complete By" : "Est. Arrival"}</div><div class="font-medium text-heading">${fmtDate(plan.estimated_arrival_date)}</div></div>
           <div><div class="text-xs text-muted">Total Expense</div><div class="font-medium text-heading tabular">${fmtCurrency(plan.total_expense)}</div></div>
           <div><div class="text-xs text-muted">Backup Supplier</div><div class="font-medium text-heading">${esc(plan.backup_supplier_id || "—")}</div></div>
+          ${plan.predictions ? `
+          <div><div class="text-xs text-muted">Expected Usable Units ${aiBadge("Order quantity minus predicted defects and short shipments")}</div><div class="font-medium text-heading tabular">${fmtNum(plan.predictions.expected_good_units)} <span class="text-xs text-muted">(${pct(plan.predictions.expected_defect_rate, 1)} defects)</span></div></div>
+          <div><div class="text-xs text-muted">On-time Probability ${aiBadge()}</div><div class="font-medium text-heading tabular">${pct(plan.predictions.on_time_probability)}</div></div>` : ""}
         </div>
+        ${plan.quality_constraint_met === false ? `<p class="text-xs font-medium text-danger mt-2">Quality flag: no supplier or combination keeps the predicted defect rate within 5% — the lowest-defect option was chosen. Review before approving.</p>` : ""}
+        ${plan.search ? `<p class="text-xs text-muted mt-2">Hybrid heuristic search: ${plan.search.plans_evaluated} supplier combinations evaluated, ${plan.search.nodes_pruned} pruned; constraints — capacity per supplier, full quantity, weighted defect ≤ ${pct(plan.search.constraints.max_defect_rate)}, ≤ ${plan.search.constraints.max_suppliers} suppliers.</p>` : ""}
         <button id="go-to-action" class="btn-primary w-full mt-4">Open in Action Hub →</button>
         ` : ""}
       </div>
@@ -1272,7 +1282,7 @@ function renderSuppliersView(data) {
         <div>
           <h1 class="page-title">Heuristic Supplier Decision Matrix — ${esc(data.sku_id)}</h1>
           <p class="text-sm text-body mt-1">H = ${pct("quality")}%·Quality + ${pct("cost")}%·Cost + ${pct("fulfillment")}%·Fulfillment + ${pct("delivery")}%·Delivery — Cost and Delivery are Min-Max normalized across eligible suppliers; Quality (1 − defect rate) and Fulfillment are used as absolute rates</p>
-          <p class="text-xs text-muted mt-1">Only suppliers that actually supply this SKU in the supply-chain data are candidates. ${estBadge()} = estimated from real history: capacity is the largest order the supplier has actually delivered for this SKU; defect and fulfillment rates are the real industry baseline from the procurement KPI file until a supplier has records of its own (then it is "Unrated" no longer). Cost and lead time are real.</p>
+          <p class="text-xs text-muted mt-1">Only suppliers that actually supply this SKU in the supply-chain data are candidates. ${aiBadge()} = learned by the supplier model from 5,027 purchase-order outcomes (defect rate, on-time-in-full, lead time = promised + predicted delay). ${estBadge()} = capacity: the largest quantity the supplier has delivered for this SKU. Unit cost is real.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <select id="matrix-sku" class="input-field min-w-[220px]">${skuOptionsHtml(data.sku_id)}</select>
@@ -1299,7 +1309,7 @@ function renderSuppliersView(data) {
           <table class="table-clean w-full">
             <thead><tr>
               <th>Rank</th><th>Supplier</th><th>Unit Cost</th><th>Lead Time (d)</th>
-              <th>Available${estBadge()}</th><th>Defect Rate${estBadge()}</th><th>Fulfillment${estBadge()}</th><th>Heuristic Score</th>
+              <th>Available${estBadge()}</th><th>Defect Rate${aiBadge("Learned by the supplier model from 5,027 purchase-order outcomes")}</th><th>On-time in Full${aiBadge("Learned by the supplier model from 5,027 purchase-order outcomes")}</th><th>Heuristic Score</th>
             </tr></thead>
             <tbody>${rows.map(supplierRow).join("")}</tbody>
           </table>
@@ -1325,7 +1335,7 @@ function renderSuppliersView(data) {
                 <td class="tabular">${fmtNum(s.available_qty)}</td>
                 <td class="tabular text-danger">${fmtNum(s.shortfall)}</td>
                 <td class="tabular">${fmtCurrency(s.unit_cost)}</td>
-                <td class="tabular">${s.lead_time_days}</td>
+                <td class="tabular">${fmtDays(s.lead_time_days)}</td>
                 <td class="text-body">${esc(s.warehouses)}</td>
               </tr>`).join("")}</tbody>
           </table>
@@ -1419,7 +1429,7 @@ function supplierRow(s) {
         <div class="text-xs text-muted">${esc(s.warehouses)}</div>
       </td>
       <td class="tabular" title="${s.lane_count > 1 ? `mean of ${s.lane_count} warehouse lanes: ${fmtCurrency(s.unit_cost_min)}–${fmtCurrency(s.unit_cost_max)}` : "single warehouse lane"}">${fmtCurrency(s.unit_cost)}${s.lane_count > 1 ? " *" : ""}</td>
-      <td class="tabular">${s.lead_time_days}</td>
+      <td class="tabular">${fmtDays(s.lead_time_days)}</td>
       <td class="tabular">${fmtNum(s.available_qty)}</td>
       <td class="tabular">${(s.defect_rate * 100).toFixed(2)}%</td>
       <td class="tabular">${(s.fulfillment_rate * 100).toFixed(1)}%</td>
