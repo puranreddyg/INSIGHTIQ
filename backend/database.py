@@ -296,8 +296,10 @@ def _ensure_purchase_orders(conn: sqlite3.Connection) -> None:
         )"""
     )
     columns = {r[1] for r in conn.execute("PRAGMA table_info(purchase_orders)").fetchall()}
-    if "sku_id" not in columns:
-        conn.execute("ALTER TABLE purchase_orders ADD COLUMN sku_id TEXT")
+    # order_group ties the lines of one (split) approval together; is_partial marks an order below the requirement
+    for name, sql_type in (("sku_id", "TEXT"), ("order_group", "TEXT"), ("is_partial", "INTEGER DEFAULT 0")):
+        if name not in columns:
+            conn.execute(f"ALTER TABLE purchase_orders ADD COLUMN {name} {sql_type}")
 
 
 def build_database(force: bool = False) -> None:
@@ -305,6 +307,8 @@ def build_database(force: bool = False) -> None:
     if config.DB_PATH.exists() and not force:
         with connect() as conn:
             if _schema_version(conn) == config.SCHEMA_VERSION:
+                _ensure_purchase_orders(conn)  # cheap; adds columns to a PO table made by an older release
+                conn.commit()
                 return
 
     supply_chain = _load_supply_chain()

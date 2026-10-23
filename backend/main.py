@@ -1,6 +1,8 @@
 """InsightIQ FastAPI application: REST gateway over the multi-agent engine."""
 from __future__ import annotations
 
+import sqlite3
+import uuid
 from datetime import datetime
 from typing import Optional
 
@@ -14,7 +16,7 @@ from pydantic import BaseModel
 import threading
 
 from backend import config
-from backend.agents import coordinator_agent, perception_agent, supplier_agent
+from backend.agents import coordinator_agent, knowledge_agent, perception_agent, planning_agent, supplier_agent
 from backend.database import TABLES_TO_BUILD, build_database, connect
 from backend.ml import forecast_evaluation
 from backend.ml.store import load_demand_model, load_supplier_meta
@@ -60,6 +62,8 @@ class ApproveOrderRequest(BaseModel):
     unit_cost: float
     estimated_arrival: Optional[str] = None
     backup_supplier_id: Optional[str] = None
+    is_partial: bool = False          # the order covers only part of the requirement (must be explicit)
+    acknowledge_risk: bool = False    # the buyer accepts a High Risk supplier (Rule 3) for this order
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +132,8 @@ def _forecast_accuracy(model) -> dict | None:
     if not bt.get("available") or not test:
         return None
     model_err, base_err = test[f"model_k{bt['selected_k']}"], test["baseline_trailing_28d"]
+    if not base_err:
+        return None
     return {
         "horizon_days": 14,
         "model_error_pct": round(model_err * 100, 1),
@@ -251,54 +257,142 @@ def run_agent_pipeline(sku_id: Optional[str] = None, product_id: Optional[int] =
 @app.get("/api/suppliers")
 def suppliers(sku_id: str, required_quantity: Optional[float] = Query(None, ge=0)):
     """Candidate matrix for one SKU. Without required_quantity, the SKU's
-    current requirement from the Perception Agent is used."""
+    current requirement from the Perception Agent is used. When no single
+    supplier can take the order, the multi-supplier plan the pipeline would
+    make is attached as `allocation_preview` (cost, lead time, arrival dates,
+    shortfall), so the matrix shows the same answer as the Action Hub."""
     with connect() as conn:
         _require_sku(conn, sku_id)
+        fact = perception_agent.observe_sku(conn, sku_id)
         if required_quantity is None:
-            required_quantity = perception_agent.observe_sku(conn, sku_id)["RequiredQuantity"]
-        return supplier_agent.rank_suppliers(conn, sku_id, required_quantity=required_quantity, top_n=None)
+            required_quantity = fact["RequiredQuantity"]
+        result = supplier_agent.rank_suppliers(conn, sku_id, required_quantity=required_quantity, top_n=None)
+        if required_quantity > 0:
+            knowledge = knowledge_agent.run({"focus_facts": []}, result)
+            result["decision"] = knowledge["decision"]
+            result["review_reason"] = knowledge["review_reason"]
+            if knowledge["split_order"]:
+                plan = planning_agent.build_split_plan(
+                    conn, fact, knowledge["allocations"], knowledge["backup_candidates"],
+                    required_quantity, knowledge["shortfall_qty"])
+                preview = {k: plan[k] for k in ("allocations", "order_quantity", "required_quantity", "shortfall_qty",
+                                                "partial_order", "total_expense", "estimated_arrival_date")}
+                preview.update(budget=knowledge["budget"], quality_constraint_met=knowledge["quality_constraint_met"],
+                               budget_constraint_met=knowledge["budget_constraint_met"])
+                result["allocation_preview"] = preview
+        return result
 
 
 # ---------------------------------------------------------------------------
 # Procurement action & approval
 # ---------------------------------------------------------------------------
 
-@app.post("/api/approve-order")
-def approve_order(payload: ApproveOrderRequest):
-    if payload.quantity <= 0:
-        raise HTTPException(status_code=422, detail="quantity must be positive")
-    total_cost = round(payload.quantity * payload.unit_cost, 2)
-    with connect() as conn:
-        _require_sku(conn, payload.sku_id)
-        profile = conn.execute(
-            "SELECT available_qty FROM supplier_sku_profile WHERE sku_id = ? AND supplier_id = ?",
-            (payload.sku_id, payload.supplier_id),
-        ).fetchone()
-        if profile is None:
-            raise HTTPException(status_code=422, detail=f"{payload.supplier_id} does not supply {payload.sku_id}")
-        if payload.quantity > profile["available_qty"]:
-            raise HTTPException(
-                status_code=422,
-                detail=f"{payload.supplier_id} has {profile['available_qty']} units of {payload.sku_id} available; "
-                       f"{payload.quantity} requested",
-            )
+def _clean(row: dict) -> dict:
+    """NaN / <NA> -> None so the Knowledge Agent's `or 0` / `is None` checks behave."""
+    return {k: (None if (not isinstance(v, str) and pd.isna(v)) else v) for k, v in row.items()}
 
+
+def _validate_lines(conn, sku_id: str, lines: list[dict], is_partial: bool, acknowledge_risk: bool) -> tuple[list[dict], int]:
+    """Re-derive everything on the server; the client's numbers are never trusted.
+
+    Checks: the SKU has a current requirement; every supplier serves the SKU and has a
+    known capacity; quantity within capacity; unit cost taken from the ledger (a
+    client cost that disagrees is rejected); High Risk suppliers (Rule 3) need an
+    explicit acknowledgement; the total never exceeds the requirement, and is below
+    it only when the order is explicitly marked partial.
+    """
+    if not lines:
+        raise HTTPException(status_code=422, detail="allocations must not be empty")
+    ids = [l["supplier_id"] for l in lines]
+    if len(set(ids)) != len(ids):
+        raise HTTPException(status_code=422, detail="each supplier may appear only once in an order")
+    required = perception_agent.observe_sku(conn, sku_id)["RequiredQuantity"]
+    if required <= 0:
+        raise HTTPException(status_code=422, detail=f"{sku_id} has no current procurement requirement")
+    matrix = {r["supplier_id"]: _clean(r) for r in supplier_agent.candidate_matrix(conn, sku_id).to_dict(orient="records")}
+
+    out = []
+    for l in lines:
+        sid, qty = l["supplier_id"], l["quantity"]
+        if qty <= 0:
+            raise HTTPException(status_code=422, detail=f"{sid}: quantity must be positive")
+        cand = matrix.get(sid)
+        if cand is None:
+            raise HTTPException(status_code=422, detail=f"{sid} does not supply {sku_id}")
+        if cand.get("available_qty") is None:
+            raise HTTPException(status_code=422, detail=f"{sid} has no known capacity for {sku_id}")
+        if qty > int(cand["available_qty"]):
+            raise HTTPException(status_code=422, detail=(
+                f"{sid} has {int(cand['available_qty'])} units of {sku_id} available; {qty} requested"))
+        unit_cost = round(float(cand["unit_cost"]), supplier_agent.DISPLAY_DECIMALS)
+        if l.get("unit_cost") is not None and abs(l["unit_cost"] - unit_cost) > 0.01:
+            raise HTTPException(status_code=422, detail=(
+                f"{sid}: unit cost {l['unit_cost']} does not match the ledger cost {unit_cost}; re-run the pipeline"))
+        status = knowledge_agent.evaluate_supplier(cand, qty, [])["supplier_status"]
+        if status == "High Risk" and not acknowledge_risk:
+            raise HTTPException(status_code=422, detail=(
+                f"{sid} is High Risk (predicted defect rate {cand['defect_rate']:.1%} > "
+                f"{config.RULE_HIGH_RISK_DEFECT_RATE:.0%}); set acknowledge_risk to order from it anyway"))
+        out.append({"supplier_id": sid, "quantity": int(qty), "unit_cost": unit_cost,
+                    "estimated_arrival": l.get("estimated_arrival"), "risk_status": status})
+
+    total = sum(o["quantity"] for o in out)
+    if total > required:
+        raise HTTPException(status_code=422, detail=f"order total {total} exceeds the current requirement of {required}")
+    if total < required and not is_partial:
+        raise HTTPException(status_code=422, detail=(
+            f"order total {total} covers only part of the requirement ({required}); mark it is_partial to approve it"))
+    return out, required
+
+
+def _insert_order(conn, sku_id: str, lines: list[dict], backup: Optional[str], is_partial: bool) -> list[dict]:
+    """Insert every line inside the caller's open transaction; the group id ties them together."""
+    group = f"PO-{uuid.uuid4().hex[:10].upper()}"
+    today = datetime.now().date().isoformat()
+    ids = []
+    for l in lines:
         cur = conn.execute(
             """INSERT INTO purchase_orders
-               (sku_id, product_name, supplier_id, supplier_name, quantity, unit_cost,
-                total_cost, order_date, estimated_arrival, backup_supplier_id, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                payload.sku_id, payload.sku_id, payload.supplier_id,
-                payload.supplier_name or payload.supplier_id, payload.quantity, payload.unit_cost,
-                total_cost, datetime.now().date().isoformat(), payload.estimated_arrival,
-                payload.backup_supplier_id, "Approved",
-            ),
+               (sku_id, product_name, supplier_id, supplier_name, quantity, unit_cost, total_cost, order_date,
+                estimated_arrival, backup_supplier_id, status, order_group, is_partial)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (sku_id, sku_id, l["supplier_id"], l["supplier_id"], l["quantity"], l["unit_cost"],
+             round(l["quantity"] * l["unit_cost"], 2), today, l["estimated_arrival"], backup, "Approved",
+             group, int(is_partial)),
         )
-        conn.commit()
-        po_id = cur.lastrowid
-        row = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (po_id,)).fetchone()
-    return {"status": "approved", "purchase_order": dict(row)}
+        ids.append(cur.lastrowid)
+    marks = ",".join("?" * len(ids))
+    return [dict(r) for r in conn.execute(f"SELECT * FROM purchase_orders WHERE id IN ({marks}) ORDER BY id", ids)]
+
+
+def _approve(sku_id: str, lines: list[dict], backup: Optional[str], is_partial: bool, acknowledge_risk: bool) -> list[dict]:
+    """Validate and save an order as ONE transaction (BEGIN IMMEDIATE also serialises
+    concurrent approvals): either every purchase order is written or none is."""
+    with connect() as conn:
+        conn.isolation_level = None  # explicit transaction control
+        _require_sku(conn, sku_id)
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            validated, _ = _validate_lines(conn, sku_id, lines, is_partial, acknowledge_risk)
+            rows = _insert_order(conn, sku_id, validated, backup, is_partial)
+            conn.execute("COMMIT")
+        except HTTPException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+        except sqlite3.Error as exc:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise HTTPException(status_code=500, detail=f"purchase order not saved (rolled back): {exc}") from exc
+    return rows
+
+
+@app.post("/api/approve-order")
+def approve_order(payload: ApproveOrderRequest):
+    line = {"supplier_id": payload.supplier_id, "quantity": payload.quantity,
+            "unit_cost": payload.unit_cost, "estimated_arrival": payload.estimated_arrival}
+    rows = _approve(payload.sku_id, [line], payload.backup_supplier_id, payload.is_partial, payload.acknowledge_risk)
+    return {"status": "approved", "order_group": rows[0]["order_group"], "purchase_order": rows[0]}
 
 
 class SplitLine(BaseModel):
@@ -312,52 +406,19 @@ class ApproveSplitOrderRequest(BaseModel):
     sku_id: str
     allocations: list[SplitLine]
     backup_supplier_id: Optional[str] = None
+    is_partial: bool = False
+    acknowledge_risk: bool = False
 
 
 @app.post("/api/approve-split-order")
 def approve_split_order(payload: ApproveSplitOrderRequest):
-    """Approve a split order: one purchase order per supplier, created all-or-nothing.
-    Every line is validated first; if any line is invalid, no purchase order is created."""
-    if not payload.allocations:
-        raise HTTPException(status_code=422, detail="allocations must not be empty")
-    supplier_ids = [line.supplier_id for line in payload.allocations]
-    if len(set(supplier_ids)) != len(supplier_ids):
-        raise HTTPException(status_code=422, detail="each supplier may appear only once in a split order")
-    with connect() as conn:
-        _require_sku(conn, payload.sku_id)
-        for line in payload.allocations:
-            if line.quantity <= 0:
-                raise HTTPException(status_code=422, detail=f"{line.supplier_id}: quantity must be positive")
-            profile = conn.execute(
-                "SELECT available_qty FROM supplier_sku_profile WHERE sku_id = ? AND supplier_id = ?",
-                (payload.sku_id, line.supplier_id),
-            ).fetchone()
-            if profile is None:
-                raise HTTPException(status_code=422, detail=f"{line.supplier_id} does not supply {payload.sku_id}")
-            if line.quantity > profile["available_qty"]:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"{line.supplier_id} has {profile['available_qty']} units of {payload.sku_id} available; "
-                           f"{line.quantity} requested",
-                )
-
-        po_ids = []
-        for line in payload.allocations:
-            cur = conn.execute(
-                """INSERT INTO purchase_orders
-                   (sku_id, product_name, supplier_id, supplier_name, quantity, unit_cost,
-                    total_cost, order_date, estimated_arrival, backup_supplier_id, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    payload.sku_id, payload.sku_id, line.supplier_id, line.supplier_id, line.quantity,
-                    line.unit_cost, round(line.quantity * line.unit_cost, 2), datetime.now().date().isoformat(),
-                    line.estimated_arrival, payload.backup_supplier_id, "Approved",
-                ),
-            )
-            po_ids.append(cur.lastrowid)
-        conn.commit()
-        rows = [dict(conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (i,)).fetchone()) for i in po_ids]
-    return {"status": "approved", "purchase_orders": rows}
+    """Approve a split order: one purchase order per supplier, created all-or-nothing
+    under one order_group. Every line is validated first; if any line is invalid,
+    no purchase order is created."""
+    lines = [l.model_dump() for l in payload.allocations]
+    rows = _approve(payload.sku_id, lines, payload.backup_supplier_id, payload.is_partial, payload.acknowledge_risk)
+    return {"status": "approved", "order_group": rows[0]["order_group"], "purchase_orders": rows,
+            "total_quantity": sum(r["quantity"] for r in rows), "total_cost": round(sum(r["total_cost"] for r in rows), 2)}
 
 
 @app.get("/api/orders")

@@ -1,0 +1,5 @@
+# Checksummed data must be byte-identical on every OS: no line-ending conversion.
+# (Windows' core.autocrlf otherwise rewrites *.sha256 / CSV / JSON and breaks the
+# SHA-256 manifest tests in backend/tests/test_ml.py.)
+DataSets/** -text
+*.sha256 -text

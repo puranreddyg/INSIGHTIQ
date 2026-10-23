@@ -82,8 +82,9 @@ def build_plan(
         return {
             "agent": "Planning Agent",
             "status": "no_action",
-            "error": "No procurement required — no warehouse lane is below its reorder point.",
-            "reasoning": ["Rule 1 did not fire for any lane of this SKU, so no purchase order is planned."],
+            "error": "No procurement required — no warehouse lane is below its planner or forecast reorder point.",
+            "reasoning": ["Rule 1 did not fire for any lane of this SKU (stock is above both the planner's and the "
+                          "forecast reorder point), so no purchase order is planned."],
         }
 
     if primary_supplier is None:

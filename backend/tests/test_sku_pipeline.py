@@ -437,15 +437,26 @@ def test_supplier_matrix_defaults_to_the_skus_requirement(client, urgent):
     assert client.get(f"/api/suppliers?sku_id={r['sku_id']}&required_quantity=0").json()["eligible_count"] == body["pool_size"]
 
 
-def test_approve_order_validates_relationship_and_availability(client, conn):
-    ok = conn.execute("SELECT sku_id, supplier_id, available_qty FROM supplier_sku_profile LIMIT 1").fetchone()
-    base = {"sku_id": ok["sku_id"], "supplier_id": ok["supplier_id"], "quantity": ok["available_qty"], "unit_cost": 10.0}
-    assert client.post("/api/approve-order", json={**base, "supplier_id": "SUP_1"}).status_code == 422
-    assert client.post("/api/approve-order", json={**base, "quantity": ok["available_qty"] + 1}).status_code == 422
+def _single_plan(client):
+    """A real urgent SKU whose plan is one supplier, with every value the UI would send."""
+    for sku in ("SKU_21", "SKU_27", "SKU_30", "SKU_15", "SKU_39", "SKU_41"):
+        body = client.post(f"/api/run-agent-pipeline?sku_id={sku}").json()
+        if body["knowledge"]["decision"] == "single":
+            return body
+    raise AssertionError("expected at least one urgent SKU served by a single supplier")
+
+
+def test_approve_order_validates_relationship_availability_and_cost(client):
+    body = _single_plan(client)
+    plan, sku = body["planning"], body["sku_id"]
+    base = {"sku_id": sku, "supplier_id": plan["primary_supplier_id"], "quantity": plan["order_quantity"],
+            "unit_cost": plan["unit_cost"]}
+    assert client.post("/api/approve-order", json={**base, "supplier_id": "SUP_999"}).status_code == 422
+    assert client.post("/api/approve-order", json={**base, "quantity": 100_000}).status_code == 422
     assert client.post("/api/approve-order", json={**base, "product_id": 6, "sku_id": None}).status_code == 422
     created = client.post("/api/approve-order", json=base)
     assert created.status_code == 200
-    assert created.json()["purchase_order"]["sku_id"] == ok["sku_id"]
+    assert created.json()["purchase_order"]["sku_id"] == sku
 
 
 def test_split_order_approval_is_all_or_nothing(client):
@@ -453,23 +464,24 @@ def test_split_order_approval_is_all_or_nothing(client):
     assert plan["split_order"] is True
     lines = [{"supplier_id": l["supplier_id"], "quantity": l["quantity"], "unit_cost": l["unit_cost"],
               "estimated_arrival": l["estimated_arrival_date"]} for l in plan["allocations"]]
+    ack = {"acknowledge_risk": True}  # SKU_44's plan includes High Risk suppliers (see test_approval.py)
 
     def count():
         return len(client.get("/api/orders?limit=500").json()["purchase_orders"])
 
     before = count()
     too_big = [dict(lines[0]), {**lines[1], "quantity": 10_000}] + lines[2:]          # 2nd line exceeds availability
-    assert client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": too_big}).status_code == 422
+    assert client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": too_big, **ack}).status_code == 422
     duplicate = [lines[0], dict(lines[0])]
-    assert client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": duplicate}).status_code == 422
+    assert client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": duplicate, **ack}).status_code == 422
     foreign = [lines[0], {**lines[1], "supplier_id": "SUP_999"}]
-    assert client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": foreign}).status_code == 422
-    assert client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": []}).status_code == 422
+    assert client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": foreign, **ack}).status_code == 422
+    assert client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": [], **ack}).status_code == 422
     assert count() == before, "a rejected split order must not create any purchase order"
 
     ok = client.post("/api/approve-split-order", json={"sku_id": "SKU_44", "allocations": lines,
-                                                         "backup_supplier_id": plan["backup_supplier_id"]})
-    assert ok.status_code == 200
+                                                         "backup_supplier_id": plan["backup_supplier_id"], **ack})
+    assert ok.status_code == 200, ok.text
     created = ok.json()["purchase_orders"]
     assert [p["supplier_id"] for p in created] == [l["supplier_id"] for l in lines]
     assert sum(p["quantity"] for p in created) == plan["order_quantity"]

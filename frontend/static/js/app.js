@@ -679,7 +679,7 @@ function renderPipelineResult(result) {
           <div class="border border-soft rounded-lg p-3 text-sm flex items-center justify-between">
             <div>
               <div class="font-medium text-heading">${esc(rec.supplier_id)}</div>
-              <div class="text-xs text-body">${fmtCurrency(rec.unit_cost)}/unit · ${fmtDays(rec.lead_time_days)}d predicted lead${aiBadge("Promised ${rec.promised_lead_time_days}d + predicted delay — Learned by the supplier model from 5,027 purchase-order outcomes")} · ${pct(rec.defect_rate, 1)} defects${aiBadge("Learned by the supplier model from 5,027 purchase-order outcomes")} · ${fmtNum(rec.available_qty)} available${estBadge()} · Score ${rec.heuristic_score?.toFixed?.(1) ?? rec.heuristic_score}</div>
+              <div class="text-xs text-body">${fmtCurrency(rec.unit_cost)}/unit · ${fmtDays(rec.lead_time_days)}d predicted lead${aiBadge(`Promised ${rec.promised_lead_time_days}d + predicted delay — learned by the supplier model from 5,027 semi-synthetic purchase-order outcomes`)} · ${pct(rec.defect_rate, 1)} defects${aiBadge("Learned by the supplier model from 5,027 semi-synthetic purchase-order outcomes (simulated from real KPI ranges, not real supplier records)")} · ${fmtNum(rec.available_qty)} available${estBadge()} · Score ${rec.heuristic_score?.toFixed?.(1) ?? rec.heuristic_score}</div>
             </div>
             <span class="badge ${statusBadgeClass(rec.supplier_status)}">${esc(rec.supplier_status)}</span>
           </div>` : plan?.status === "needs_review" ? `
@@ -1288,7 +1288,7 @@ function renderSuppliersView(data) {
         <div>
           <h1 class="page-title">Heuristic Supplier Decision Matrix — ${esc(data.sku_id)}</h1>
           <p class="text-sm text-body mt-1">H = ${pct("quality")}%·Quality + ${pct("cost")}%·Cost + ${pct("fulfillment")}%·Fulfillment + ${pct("delivery")}%·Delivery — Cost and Delivery are Min-Max normalized across eligible suppliers; Quality (1 − defect rate) and Fulfillment are used as absolute rates</p>
-          <p class="text-xs text-muted mt-1">Only suppliers that actually supply this SKU in the supply-chain data are candidates. ${aiBadge()} = learned by the supplier model from 5,027 purchase-order outcomes (defect rate, on-time-in-full, lead time = promised + predicted delay). ${estBadge()} = capacity: the largest quantity the supplier has delivered for this SKU. Unit cost is real.</p>
+          <p class="text-xs text-muted mt-1">Only suppliers that actually supply this SKU in the supply-chain data are candidates. ${aiBadge()} = learned by the supplier model from 5,027 semi-synthetic purchase-order outcomes — simulated from real KPI ranges, not real supplier records (defect rate, on-time-in-full, lead time = promised + predicted delay). ${estBadge()} = capacity: the largest quantity the supplier has delivered for this SKU. Unit cost is real.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <select id="matrix-sku" class="input-field min-w-[220px]">${skuOptionsHtml(data.sku_id)}</select>
@@ -1315,7 +1315,7 @@ function renderSuppliersView(data) {
           <table class="table-clean w-full">
             <thead><tr>
               <th>Rank</th><th>Supplier</th><th>Unit Cost</th><th>Lead Time (d)</th>
-              <th>Available${estBadge()}</th><th>Defect Rate${aiBadge("Learned by the supplier model from 5,027 purchase-order outcomes")}</th><th>On-time in Full${aiBadge("Learned by the supplier model from 5,027 purchase-order outcomes")}</th><th>Heuristic Score</th>
+              <th>Available${estBadge()}</th><th>Defect Rate${aiBadge("Learned by the supplier model from 5,027 semi-synthetic purchase-order outcomes (simulated from real KPI ranges, not real supplier records)")}</th><th>On-time in Full${aiBadge("Learned by the supplier model from 5,027 semi-synthetic purchase-order outcomes (simulated from real KPI ranges, not real supplier records)")}</th><th>Heuristic Score</th>
             </tr></thead>
             <tbody>${rows.map(supplierRow).join("")}</tbody>
           </table>
@@ -1323,8 +1323,20 @@ function renderSuppliersView(data) {
       </div>` : `
       <div class="card p-6 text-sm">
         <div class="font-semibold text-danger">No eligible supplier for ${fmtNum(data.required_quantity)} units</div>
-        <p class="text-body mt-1">Combined availability across all ${data.pool_size} candidates is ${fmtNum(data.combined_available_qty)} units${estBadge()}. ${data.split_order_possible ? "No single supplier can cover it, but together they can — run the Agent Pipeline for this SKU to see the split plan." : data.partial_order_possible ? `Even all suppliers together fall ${fmtNum(data.shortfall_qty)} units short — the Agent Pipeline plans a partial order from all of them and reports the shortfall.` : "No supplier has any known capacity for this SKU."}</p>
+        <p class="text-body mt-1">Combined availability across all ${data.pool_size} candidates is ${fmtNum(data.combined_available_qty)} units${estBadge()}. ${data.split_order_possible ? "No single supplier can cover it, but together they can — the multi-supplier plan is shown below." : data.partial_order_possible ? `Even all suppliers together fall ${fmtNum(data.shortfall_qty)} units short — a partial order from all of them is planned below, with the shortfall.` : "No supplier has any known capacity for this SKU."}</p>
       </div>`}
+
+      ${data.allocation_preview ? `
+      <div class="card p-5">
+        <h2 class="font-semibold text-heading mb-1">${data.allocation_preview.partial_order ? "Partial " : ""}Multi-Supplier Plan — ${fmtNum(data.allocation_preview.order_quantity)} of ${fmtNum(data.allocation_preview.required_quantity)} units</h2>
+        <p class="text-xs text-body">${rows.length ? "No single supplier meets capacity, quality and budget together, so the order is shared." : "No single supplier can cover this order alone, so it is shared."}
+          Total ${fmtCurrency(data.allocation_preview.total_expense)}${data.allocation_preview.budget ? ` of a ${fmtCurrency(data.allocation_preview.budget)} budget` : ""}; the last delivery lands ${fmtDate(data.allocation_preview.estimated_arrival_date)}.</p>
+        ${data.allocation_preview.partial_order ? `<p class="text-xs font-medium text-danger mt-2">Shortfall: ${fmtNum(data.allocation_preview.shortfall_qty)} units cannot be covered by any supplier within the quality and budget limits.</p>` : ""}
+        ${data.allocation_preview.allocations.some((l) => l.supplier_status === "High Risk") ? `<p class="text-xs font-medium text-danger mt-2">Includes a High Risk supplier — approving needs an explicit confirmation.</p>` : ""}
+        ${splitAllocationsTable(data.allocation_preview.allocations)}
+      </div>` : data.decision === "needs_review" ? `
+      <div class="card p-5 text-sm"><div class="font-semibold text-danger">Needs manual review</div>
+        <p class="text-body mt-1">${esc(data.review_reason || "No supplier plan meets the constraints.")}</p></div>` : ""}
 
       ${data.ineligible_suppliers.length ? `
       <div class="card p-0 overflow-hidden">
@@ -1557,6 +1569,11 @@ async function loadActionView() {
   }
 
   const rec = knowledge.recommended_supplier;
+  // Lines the buyer must knowingly accept: High Risk suppliers (Rule 3) and a plan that misses a constraint.
+  const planLines = plan.split_order ? plan.allocations : [{ supplier_id: plan.primary_supplier_id, supplier_status: rec?.supplier_status }];
+  const riskyLines = planLines.filter((l) => l.supplier_status === "High Risk");
+  const flagged = plan.quality_constraint_met === false || plan.budget_constraint_met === false;
+  const needsAck = riskyLines.length > 0 || flagged;
   root.innerHTML = `
     <div class="fade-in space-y-6">
       <div>
@@ -1575,6 +1592,11 @@ async function loadActionView() {
             : `<span class="badge ${statusBadgeClass(rec?.supplier_status)}">${esc(rec?.supplier_status || "N/A")}</span>`}
         </div>
 
+        ${needsAck ? `<div class="mb-4 border border-soft rounded-lg p-3 text-sm"><span class="font-medium text-danger">Needs your decision before approving:</span>
+          ${riskyLines.length ? ` ${esc(riskyLines.map((l) => l.supplier_id).join(", "))} ${riskyLines.length > 1 ? "are" : "is"} <b>High Risk</b> (predicted defect rate above 5%, Rule 3).` : ""}
+          ${plan.quality_constraint_met === false ? " No compliant plan keeps the predicted defect rate within 5%." : ""}
+          ${plan.budget_constraint_met === false ? ` No compliant plan fits the budget of ${fmtCurrency(plan.budget)}.` : ""}
+          Approving will ask you to confirm.</div>` : ""}
         ${plan.partial_order ? `<div class="mb-4 border border-soft rounded-lg p-3 text-sm"><span class="font-medium text-danger">Partial order:</span> all suppliers together can supply ${fmtNum(plan.order_quantity)} of the ${fmtNum(plan.required_quantity)} units needed. ${fmtNum(plan.shortfall_qty)} units still need a new supplier or a follow-up order.</div>` : ""}
         ${plan.split_order ? `<div class="mb-6">${splitAllocationsTable(plan.allocations)}</div>` : ""}
 
@@ -1604,12 +1626,18 @@ async function loadActionView() {
     </div>
   `;
 
-  renderReplenishmentChart(plan.replenishment_curve, plan.estimated_arrival_date);
+  renderReplenishmentChart(plan.replenishment_curve, plan.split_order ? plan.allocations.map((l) => l.estimated_arrival_date) : [plan.estimated_arrival_date]);
   staggerIn(root, ".stat-tile");
 
   document.getElementById("approve-btn").addEventListener("click", async (e) => {
-    e.target.disabled = true;
-    e.target.textContent = "Processing…";
+    const btn = e.currentTarget;
+    const warnings = [];
+    if (riskyLines.length) warnings.push(`${riskyLines.map((l) => l.supplier_id).join(", ")} ${riskyLines.length > 1 ? "are" : "is"} rated High Risk (predicted defect rate above 5%).`);
+    if (flagged) warnings.push("This plan misses a quality or budget constraint.");
+    if (plan.partial_order) warnings.push(`It covers only ${plan.order_quantity} of ${plan.required_quantity} units (shortfall ${plan.shortfall_qty}).`);
+    if (warnings.length && !confirm(`${warnings.join("\n")}\n\nApprove this purchase order anyway?`)) return;
+    btn.disabled = true;
+    btn.textContent = "Processing…";
     try {
       const payload = {
         sku_id: focus.sku_id,
@@ -1619,6 +1647,8 @@ async function loadActionView() {
         unit_cost: plan.unit_cost,
         estimated_arrival: plan.estimated_arrival_date,
         backup_supplier_id: plan.backup_supplier_id,
+        is_partial: !!plan.partial_order,
+        acknowledge_risk: needsAck,
       };
       if (plan.split_order) {
         const res = await Api.approveSplitOrder({
@@ -1630,6 +1660,8 @@ async function loadActionView() {
             estimated_arrival: l.estimated_arrival_date,
           })),
           backup_supplier_id: plan.backup_supplier_id,
+          is_partial: !!plan.partial_order,
+          acknowledge_risk: needsAck,
         });
         document.getElementById("approve-status").textContent =
           `✓ ${res.purchase_orders.length} purchase orders approved (#${res.purchase_orders.map((p) => p.id).join(", #")}).`;
@@ -1641,11 +1673,11 @@ async function loadActionView() {
       }
       const hist = (await Api.orders()).purchase_orders;
       document.querySelectorAll(".order-history-root").forEach((el) => (el.outerHTML = renderOrderHistory(hist)));
-      e.target.textContent = "Approved ✓";
+      btn.textContent = "Approved ✓";
     } catch (err) {
       toast("Failed to approve order: " + err.message, "error");
-      e.target.disabled = false;
-      e.target.textContent = "One-Click Approve & Execute Purchase Order";
+      btn.disabled = false;
+      btn.textContent = "One-Click Approve & Execute Purchase Order";
     }
   });
 }
@@ -1654,7 +1686,8 @@ function planStat(label, value) {
   return `<div class="stat-tile"><div class="text-xs text-body">${esc(label)}</div><div class="text-xl font-bold text-heading mt-1 tabular">${value}</div></div>`;
 }
 
-function renderReplenishmentChart(curve, arrivalDate) {
+function renderReplenishmentChart(curve, arrivalDates) {
+  const arrivals = new Set([].concat(arrivalDates));
   destroyChart("replenishment");
   const pal = chartPalette();
   charts.replenishment = new Chart(document.getElementById("chart-replenishment"), {
@@ -1684,7 +1717,7 @@ function renderReplenishmentChart(curve, arrivalDate) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (ctx) => `${ctx.parsed.y} units${curve[ctx.dataIndex].date === arrivalDate ? "  (order arrives)" : ""}`,
+            label: (ctx) => `${ctx.parsed.y} units${arrivals.has(curve[ctx.dataIndex].date) ? "  (delivery arrives)" : ""}`,
           },
         },
       },
@@ -1704,18 +1737,19 @@ function renderOrderHistory(history) {
       </div>
       <div class="overflow-x-auto">
         <table class="table-clean w-full">
-          <thead><tr><th>PO #</th><th>SKU</th><th>Supplier</th><th>Qty</th><th>Total Cost</th><th>ETA</th><th>Status</th></tr></thead>
+          <thead><tr><th>PO #</th><th>Order</th><th>SKU</th><th>Supplier</th><th>Qty</th><th>Total Cost</th><th>ETA</th><th>Status</th></tr></thead>
           <tbody>
             ${history.length ? history.map((po) => `
               <tr>
                 <td class="tabular">#${po.id}</td>
+                <td class="text-xs text-body">${po.order_group ? esc(po.order_group) : "—"}</td>
                 <td class="font-medium text-heading">${esc(po.sku_id || po.product_name)}</td>
                 <td class="text-body">${esc(po.supplier_name)}</td>
                 <td class="tabular">${fmtNum(po.quantity)}</td>
                 <td class="tabular">${fmtCurrency(po.total_cost)}</td>
                 <td>${fmtDate(po.estimated_arrival)}</td>
-                <td><span class="badge badge-preferred">${esc(po.status)}</span></td>
-              </tr>`).join("") : `<tr><td colspan="7" class="text-center text-muted py-8">No approved purchase orders yet.</td></tr>`}
+                <td><span class="badge badge-preferred">${esc(po.status)}</span>${po.is_partial ? ' <span class="badge badge-urgent">Partial</span>' : ""}</td>
+              </tr>`).join("") : `<tr><td colspan="8" class="text-center text-muted py-8">No approved purchase orders yet.</td></tr>`}
           </tbody>
         </table>
       </div>

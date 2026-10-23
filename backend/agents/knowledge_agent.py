@@ -428,7 +428,7 @@ def run(perception_result: dict, supplier_result: dict) -> dict:
         recommended = next((c for c in annotated_candidates
                             if c["supplier_status"] != "High Risk" and within[c["supplier_id"]]), None)
         if recommended is not None:
-            decision = "single"
+            decision = "single" if required else "no_action"  # nothing to buy: the pick is informational only
 
     if required and recommended is None and pool:
         allocations, backup_candidates, shortfall = allocate_split_order(pool, required, trace, budget)
