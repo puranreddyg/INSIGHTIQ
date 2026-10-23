@@ -11,7 +11,7 @@ Here is exactly how it works, step-by-step, including all math formulas and an e
 ## Step 1: Eligibility Filtering
 Before doing any math, the agent filters the list of available suppliers based on raw constraints. 
 * **The Rule:** The supplier's current `stock_availability` must be greater than or equal to the required `Deficit` (the amount of inventory you need to order).
-* **Fallback:** If *no single supplier* can cover the entire deficit, the agent will skip filtering and evaluate the entire pool for a potential split order.
+* **Fallback:** If *no acceptable single supplier* can cover the requirement, every supplier with stock is scored as an `allocation_pool`. Acceptable (non-High-Risk) suppliers are then allocated in heuristic-rank order, each up to its availability. Any residual shortage is reported explicitly (see `docs/IMPROVEMENTS.md`).
 
 ## Step 2: Normalization
 Because Cost (e.g., $10), Delivery Time (e.g., 5 days), and Ratings (e.g., 4.5 stars) are completely different units, the system must put them on an equal playing field. It does this using **Min-Max Normalization** so all values fall between `0.0` and `1.0`.

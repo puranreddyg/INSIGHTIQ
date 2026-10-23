@@ -1,0 +1,673 @@
+{
+  "raw_source_unchanged": true,
+  "dataset_changes": [
+    {
+      "dataset": "All 6 raw CSVs",
+      "location": "DataSets/",
+      "field": "all",
+      "change_type": "RETAINED",
+      "before": "6 files",
+      "after": "6 files, SHA-256 identical",
+      "reason": "Raw data must stay recoverable and unchanged",
+      "evidence": "Before/after SHA-256 match; git diff HEAD empty",
+      "real_or_simulated": "REAL",
+      "method": "Read-only",
+      "impact": "None"
+    },
+    {
+      "dataset": "Raw checksum manifest",
+      "location": "DataSets/CHECKSUMS.sha256",
+      "field": "-",
+      "change_type": "ADDED",
+      "before": "-",
+      "after": "6 SHA-256 lines",
+      "reason": "Proves raw files are unchanged",
+      "evidence": "sha256sum of each raw CSV before any change",
+      "real_or_simulated": "N/A",
+      "method": "sha256sum",
+      "impact": "Verified by tests and validate.py"
+    },
+    {
+      "dataset": "Backup",
+      "location": "data/backup/pre_migration_2026-09-27/",
+      "field": "-",
+      "change_type": "ADDED",
+      "before": "-",
+      "after": "6 raw CSVs + pre-migration insightiq.db",
+      "reason": "Original data must remain recoverable",
+      "evidence": "Copies verified against manifest; DB hash identical",
+      "real_or_simulated": "REAL",
+      "method": "Byte copy",
+      "impact": "Local only (data/ is git-ignored); git history also holds raw CSVs"
+    },
+    {
+      "dataset": "Simulated supplier-SKU profile",
+      "location": "DataSets/simulated/supplier_sku_profile.csv",
+      "field": "file",
+      "change_type": "ADDED",
+      "before": "-",
+      "after": "211 rows \u00d7 5 columns",
+      "reason": "Fill genuine data gaps (supplier availability and quality)",
+      "evidence": "No source column holds supplier stock or SUP_x quality",
+      "real_or_simulated": "SIMULATED",
+      "method": "backend/simulation/supplier_sku_profile.py, seed 20260926",
+      "impact": "Loaded as table supplier_sku_profile"
+    },
+    {
+      "dataset": "Simulated supplier-SKU profile",
+      "location": "supplier_sku_profile.csv",
+      "field": "sku_id, supplier_id",
+      "change_type": "ADDED",
+      "before": "-",
+      "after": "211 pairs",
+      "reason": "Row key; relationships must be real",
+      "evidence": "Exactly the distinct (SKU_ID, Supplier_ID) pairs of supply_chain_dataset1.csv; 0 invented, 0 missing",
+      "real_or_simulated": "REAL",
+      "method": "Copied from source",
+      "impact": "None invented"
+    },
+    {
+      "dataset": "Simulated supplier-SKU profile",
+      "location": "supplier_sku_profile.csv",
+      "field": "available_qty",
+      "change_type": "ADDED",
+      "before": "-",
+      "after": "range 200-499, mean 351.7",
+      "reason": "Supplier-side availability does not exist in the source",
+      "evidence": "Inventory_Level is buyer stock (100.0% stock-flow match)",
+      "real_or_simulated": "SIMULATED",
+      "method": "One draw from the pair's own historical Order_Quantity values",
+      "impact": "Drives the eligibility filter"
+    },
+    {
+      "dataset": "Simulated supplier-SKU profile",
+      "location": "supplier_sku_profile.csv",
+      "field": "defect_rate",
+      "change_type": "ADDED",
+      "before": "-",
+      "after": "Beta(1.5927, 21.8594) draws, cap 0.1442",
+      "reason": "KPI vendors cannot be mapped to SUP_x",
+      "evidence": "No shared key, SKU, category or date range",
+      "real_or_simulated": "SIMULATED",
+      "method": "Supplier-level Beta method-of-moments fit to 5 real KPI supplier rates",
+      "impact": "Drives Rule 2/3 and quality score"
+    },
+    {
+      "dataset": "Simulated supplier-SKU profile",
+      "location": "supplier_sku_profile.csv",
+      "field": "defect_rate (SUP_3)",
+      "change_type": "TRANSFORMED",
+      "before": "0.1634",
+      "after": "0.1442",
+      "reason": "Approved cap at highest real supplier rate",
+      "evidence": "Real max 0.1442986 floored to 4 dp",
+      "real_or_simulated": "SIMULATED",
+      "method": "min(value, cap)",
+      "impact": "Capped suppliers: ['SUP_3']"
+    },
+    {
+      "dataset": "Simulated supplier-SKU profile",
+      "location": "supplier_sku_profile.csv",
+      "field": "fulfillment_rate",
+      "change_type": "ADDED",
+      "before": "-",
+      "after": "Binomial(137, 0.804598)/137",
+      "reason": "Needed by Rule 4; no SUP_x performance data exists",
+      "evidence": "Real suppliers do not differ (chi-square p = 0.912)",
+      "real_or_simulated": "SIMULATED",
+      "method": "Supplier-level binomial sampling around real pooled rate",
+      "impact": "Drives Rule 4 and fulfillment score"
+    },
+    {
+      "dataset": "Simulated supplier-SKU profile",
+      "location": "supplier_sku_profile.csv",
+      "field": "on_time_rate \u2192 fulfillment_rate",
+      "change_type": "RENAMED",
+      "before": "on_time_rate (proposed)",
+      "after": "fulfillment_rate",
+      "reason": "KPI data has no promised delivery date",
+      "evidence": "Columns of Procurement KPI Analysis Dataset.csv",
+      "real_or_simulated": "SIMULATED",
+      "method": "Naming",
+      "impact": "Avoids claiming an on-time metric"
+    },
+    {
+      "dataset": "Simulation metadata",
+      "location": "DataSets/simulated/*.meta.json, evidence/, README.md",
+      "field": "-",
+      "change_type": "ADDED",
+      "before": "-",
+      "after": "seed, parameters, input/output hashes, per-pair statistics, data dictionary",
+      "reason": "Reproducibility and audit",
+      "evidence": "-",
+      "real_or_simulated": "N/A",
+      "method": "Generated by the simulation script",
+      "impact": "Documentation"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "supplier_profiles",
+      "field": "table",
+      "change_type": "DELETED",
+      "before": "10 rows \u00d7 13 columns",
+      "after": "-",
+      "reason": "Built on an unsupported round-robin KPI-vendor\u2192SUP_x mapping",
+      "evidence": "No join key between datasets",
+      "real_or_simulated": "N/A (derived)",
+      "method": "DROP TABLE",
+      "impact": "Replaced by sku_supplier_lanes + supplier_sku_profile"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "supplier_profiles",
+      "field": "benchmarked_against",
+      "change_type": "DELETED",
+      "before": "10 assignments",
+      "after": "-",
+      "reason": "Round-robin mapping with no evidence",
+      "evidence": "Assignment depended only on sort order",
+      "real_or_simulated": "N/A",
+      "method": "Removed with table",
+      "impact": "Quality no longer inherited from list position"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "supplier_profiles",
+      "field": "stock_availability",
+      "change_type": "DELETED",
+      "before": "sum of latest Inventory_Level by supplier",
+      "after": "-",
+      "reason": "Mislabelled: it was the buyer's own warehouse stock",
+      "evidence": "100% stock-flow match",
+      "real_or_simulated": "N/A",
+      "method": "Removed with table",
+      "impact": "Replaced by simulated available_qty"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "supplier_profiles",
+      "field": "rating, reliability_score, delivery_time_days, region",
+      "change_type": "DELETED",
+      "before": "KPI rating via mapping; min-max lead-time std index; 0.7/0.3 blend with KPI days; region mode",
+      "after": "-",
+      "reason": "Derived from the invalid mapping or from noise (Region changes daily within a fixed lane)",
+      "evidence": "Region: 4 values per fixed lane",
+      "real_or_simulated": "N/A",
+      "method": "Removed with table",
+      "impact": "Replaced by real lane cost/lead time + simulated quality"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "sku_supplier_lanes",
+      "field": "table",
+      "change_type": "ADDED",
+      "before": "-",
+      "after": "250 rows \u00d7 5 columns",
+      "reason": "Real per-SKU, per-warehouse supplier cost and lead time",
+      "evidence": "Supplier, cost, lead time constant for all 365 days per lane",
+      "real_or_simulated": "REAL (derived)",
+      "method": "Lossless collapse of 91,250 daily rows; build fails if a lane attribute ever varies",
+      "impact": "Candidate matrix source"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "supplier_sku_profile",
+      "field": "table",
+      "change_type": "ADDED",
+      "before": "-",
+      "after": "211 rows \u00d7 5 columns",
+      "reason": "Load of the simulated CSV",
+      "evidence": "Loader rejects invented pairs, duplicates, out-of-range values",
+      "real_or_simulated": "SIMULATED (+ real keys)",
+      "method": "to_sql",
+      "impact": "ERP-replaceable"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "supply_chain",
+      "field": "all",
+      "change_type": "RETAINED",
+      "before": "91250 rows \u00d7 15",
+      "after": "91250 rows \u00d7 15",
+      "reason": "Time series needed for future ML/GA",
+      "evidence": "Row and column counts identical",
+      "real_or_simulated": "REAL",
+      "method": "Unchanged",
+      "impact": "Now the primary procurement source"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "products",
+      "field": "target_stock, deficit, urgent",
+      "change_type": "DELETED",
+      "before": "12 columns",
+      "after": "9 columns",
+      "reason": "Only existed for product-based procurement",
+      "evidence": "53 urgent rows, 26 of them discontinued",
+      "real_or_simulated": "N/A (derived)",
+      "method": "Not computed any more",
+      "impact": "Reproducible from raw CSV"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "products",
+      "field": "reorder_level",
+      "change_type": "TRANSFORMED",
+      "before": "clip(lower=1)",
+      "after": "raw value",
+      "reason": "Clip only served the urgency calculation",
+      "evidence": "1 row(s) had ReorderLevel 0",
+      "real_or_simulated": "REAL",
+      "method": "Clip removed",
+      "impact": "Raw value kept"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "products",
+      "field": "all rows",
+      "change_type": "FILTERED",
+      "before": "1000 rows eligible for procurement",
+      "after": "0 rows eligible for procurement (table retained)",
+      "reason": "No ProductID\u2192SKU or ProductID\u2192supplier relationship",
+      "evidence": "SupplierID == ProductID on all 1,000 rows",
+      "real_or_simulated": "REAL",
+      "method": "No agent reads the table",
+      "impact": "26 discontinued urgent products can no longer trigger procurement"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "idx_products_urgent",
+      "field": "index",
+      "change_type": "DELETED",
+      "before": "index on products(urgent)",
+      "after": "-",
+      "reason": "Column removed",
+      "evidence": "-",
+      "real_or_simulated": "N/A",
+      "method": "DROP INDEX",
+      "impact": "None"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "purchase_orders",
+      "field": "sku_id",
+      "change_type": "ADDED",
+      "before": "13 columns",
+      "after": "14 columns",
+      "reason": "Procurement identity is SKU",
+      "evidence": "0 rows existed; ALTER TABLE keeps any rows",
+      "real_or_simulated": "N/A",
+      "method": "ALTER TABLE ADD COLUMN",
+      "impact": "product_id kept for legacy rows"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "indexes",
+      "field": "supply_chain(date), supply_chain(sku_id,date), unique lanes, unique profile",
+      "change_type": "ADDED",
+      "before": "-",
+      "after": "4 indexes",
+      "reason": "Query speed and integrity constraints",
+      "evidence": "-",
+      "real_or_simulated": "N/A",
+      "method": "CREATE INDEX",
+      "impact": "Duplicate pairs rejected by the DB"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "PRAGMA user_version",
+      "field": "-",
+      "change_type": "MODIFIED",
+      "before": "0",
+      "after": "2",
+      "reason": "Old databases rebuild automatically",
+      "evidence": "-",
+      "real_or_simulated": "N/A",
+      "method": "Schema version check at startup",
+      "impact": "Existing purchase orders preserved"
+    },
+    {
+      "dataset": "SQLite",
+      "location": "calendar",
+      "field": "rows",
+      "change_type": "FILTERED",
+      "before": "1000 raw rows",
+      "after": "935 rows",
+      "reason": "Pre-existing loader behaviour (unchanged by this migration)",
+      "evidence": "65 duplicate dates",
+      "real_or_simulated": "REAL",
+      "method": "drop_duplicates(date)",
+      "impact": "Raw file unchanged"
+    },
+    {
+      "dataset": "Config",
+      "location": "backend/config.py",
+      "field": "TARGET_STOCK_MULTIPLIER, RULE_PREFERRED_RATING, DEFAULT_DAILY_DEMAND_FALLBACK",
+      "change_type": "DELETED",
+      "before": "3, 4.5, 15",
+      "after": "-",
+      "reason": "Their only consumers were removed",
+      "evidence": "-",
+      "real_or_simulated": "N/A",
+      "method": "Removed",
+      "impact": "Replaced by lot-size rule, R2 defect condition, real Units_Sold"
+    },
+    {
+      "dataset": "Config",
+      "location": "backend/config.py",
+      "field": "w1_rating, w4_reliability",
+      "change_type": "RENAMED",
+      "before": "w1_rating 0.30, w4_reliability 0.25",
+      "after": "w1_quality 0.30, w4_fulfillment 0.25",
+      "reason": "Inputs changed; values kept",
+      "evidence": "-",
+      "real_or_simulated": "N/A",
+      "method": "Key rename",
+      "impact": "Weight values unchanged"
+    }
+  ],
+  "deletions": [
+    {
+      "what": "SQLite table supplier_profiles",
+      "count": "10 rows \u00d7 13 columns",
+      "why": "Built on an unsupported mapping and a mislabelled stock field",
+      "evidence": "No shared key between KPI vendors and SUP_x; Inventory_Level is buyer stock",
+      "future_impact": "None: every real input remains in supply_chain",
+      "preserved_in_backup": "Yes: data/backup/pre_migration_2026-09-27/insightiq.db and full contents in state_before.json",
+      "replaced_by": "sku_supplier_lanes (real) + supplier_sku_profile (simulated)"
+    },
+    {
+      "what": "Round-robin supplier mapping",
+      "count": "10 assignments: SUP_1\u2192Alpha_Inc, SUP_2\u2192Beta_Supplies, SUP_3\u2192Delta_Logistics, SUP_4\u2192Epsilon_Group, SUP_5\u2192Gamma_Co, SUP_6\u2192Alpha_Inc, SUP_7\u2192Beta_Supplies, SUP_8\u2192Delta_Logistics, SUP_9\u2192Epsilon_Group, SUP_10\u2192Gamma_Co",
+      "why": "Relationship with no evidence",
+      "evidence": "Assigned by sorted position only",
+      "future_impact": "None",
+      "preserved_in_backup": "Yes (state_before.json)",
+      "replaced_by": "Explicitly simulated supplier-level quality"
+    },
+    {
+      "what": "Derived products columns target_stock, deficit, urgent",
+      "count": "1000 rows \u00d7 3 columns",
+      "why": "Only used for product-based procurement",
+      "evidence": "53 urgent flags, 26 on discontinued products",
+      "future_impact": "None: recomputable from raw product.csv",
+      "preserved_in_backup": "Yes (backup DB); raw CSV untouched",
+      "replaced_by": "SKU urgency from supply_chain"
+    },
+    {
+      "what": "Index idx_products_urgent",
+      "count": "1 index",
+      "why": "Indexed a removed column",
+      "evidence": "-",
+      "future_impact": "None",
+      "preserved_in_backup": "Yes (backup DB)",
+      "replaced_by": "-"
+    },
+    {
+      "what": "Products excluded from procurement (FILTERED, not deleted)",
+      "count": "1000 rows",
+      "why": "No product\u2192SKU/supplier relationship",
+      "evidence": "SupplierID == ProductID on every row",
+      "future_impact": "None: table retained for reference",
+      "preserved_in_backup": "Rows are still in the database and raw CSV",
+      "replaced_by": "SKU-based requests"
+    },
+    {
+      "what": "Calendar duplicate dates (pre-existing, unchanged)",
+      "count": "65 rows",
+      "why": "Loader keeps one row per date",
+      "evidence": "Duplicate parsed dates",
+      "future_impact": "None",
+      "preserved_in_backup": "Raw CSV untouched",
+      "replaced_by": "-"
+    },
+    {
+      "what": "Config constants",
+      "count": "3 constants",
+      "why": "No remaining consumers",
+      "evidence": "-",
+      "future_impact": "None",
+      "preserved_in_backup": "git history",
+      "replaced_by": "See change log"
+    },
+    {
+      "what": "Code: perception demand_signals (orders + customers aggregation)",
+      "count": "1 function",
+      "why": "E-commerce orders have no product/SKU reference; unused by the UI",
+      "evidence": "order.csv has no product column",
+      "future_impact": "None: orders/customers tables retained",
+      "preserved_in_backup": "git history",
+      "replaced_by": "Real Units_Sold demand per SKU"
+    },
+    {
+      "what": "Behaviour: split-order fallback that ranked the full pool when nobody was eligible",
+      "count": "1 code path",
+      "why": "It recommended a supplier that could not fulfil the order",
+      "evidence": "Required by the 'no false selection' requirement",
+      "future_impact": "Split-order optimisation can be added later; combined availability is reported",
+      "preserved_in_backup": "git history",
+      "replaced_by": "no_eligible_supplier result, no recommendation, no plan"
+    },
+    {
+      "what": "API GET /api/products",
+      "count": "1 endpoint",
+      "why": "Product table no longer drives procurement",
+      "evidence": "-",
+      "future_impact": "None",
+      "preserved_in_backup": "git history",
+      "replaced_by": "GET /api/skus (old path returns 410)"
+    }
+  ],
+  "code_changes": [
+    {
+      "file": "backend/agents/coordinator_agent.py",
+      "added": 11,
+      "removed": 8,
+      "what": "Passes sku_id and required quantity",
+      "old": "product_id, deficit",
+      "new": "sku_id, required_quantity"
+    },
+    {
+      "file": "backend/agents/knowledge_agent.py",
+      "added": 98,
+      "removed": 44,
+      "what": "Rules on new fields; R5 capacity; no-eligible decision",
+      "old": "Rating/reliability rules",
+      "new": "R2 lead+defect, R4 fulfillment \u2265 0.90, R5 capacity"
+    },
+    {
+      "file": "backend/agents/perception_agent.py",
+      "added": 107,
+      "removed": 80,
+      "what": "SKU urgency from latest supply_chain date; lanes kept",
+      "old": "Read products table",
+      "new": "Per-lane Rule 1 inputs, required qty = median lot size sum"
+    },
+    {
+      "file": "backend/agents/planning_agent.py",
+      "added": 40,
+      "removed": 27,
+      "what": "No plan when nothing needed / no supplier; real demand",
+      "old": "Planned any product, ROP/14 demand",
+      "new": "Order = required qty; demand = 28-day mean Units_Sold"
+    },
+    {
+      "file": "backend/agents/supplier_agent.py",
+      "added": 142,
+      "removed": 136,
+      "what": "Candidate matrix per SKU, eligibility, injectable weights",
+      "old": "Supplier-wide pool, total stock filter, full-pool fallback",
+      "new": "Only suppliers serving the SKU; ineligible reported, never ranked"
+    },
+    {
+      "file": "backend/config.py",
+      "added": 24,
+      "removed": 9,
+      "what": "Paths, provenance, seed, schema version; renamed weight keys",
+      "old": "Product-era constants",
+      "new": "SKU-era constants; weights unchanged"
+    },
+    {
+      "file": "backend/database.py",
+      "added": 104,
+      "removed": 116,
+      "what": "Removed round-robin profiles; added lanes + validated profile loader; schema v2 migration",
+      "old": "Built supplier_profiles; product urgency",
+      "new": "Real lanes, simulated profile, auto-rebuild, PO migration"
+    },
+    {
+      "file": "backend/main.py",
+      "added": 100,
+      "removed": 72,
+      "what": "SKU endpoints; validation on approve-order",
+      "old": "product endpoints",
+      "new": "/api/skus, sku_id params, 410 for product_id"
+    },
+    {
+      "file": "backend/tests/test_supplier_agent.py",
+      "added": 167,
+      "removed": 178,
+      "what": "Rewritten for candidate matrix and new components",
+      "old": "Old schema",
+      "new": "35 tests"
+    },
+    {
+      "file": "frontend/static/css/styles.css",
+      "added": 2,
+      "removed": 0,
+      "what": "Ineligible and SIM badges",
+      "old": "-",
+      "new": "2 classes"
+    },
+    {
+      "file": "frontend/static/js/api.js",
+      "added": 8,
+      "removed": 4,
+      "what": "skus(), sku_id params",
+      "old": "products(), product_id",
+      "new": "skus(), sku_id"
+    },
+    {
+      "file": "frontend/static/js/app.js",
+      "added": 162,
+      "removed": 93,
+      "what": "SKU picker, alert table, matrix, SIM labels, no-eligible states",
+      "old": "Product fields",
+      "new": "SKU fields"
+    },
+    {
+      "file": "requirements.txt",
+      "added": 1,
+      "removed": 0,
+      "what": "+ httpx (FastAPI TestClient)",
+      "old": "-",
+      "new": "httpx==0.28.1"
+    },
+    {
+      "file": "backend/simulation/supplier_sku_profile.py",
+      "added": null,
+      "removed": 0,
+      "what": "Simulation generator",
+      "old": "-",
+      "new": "new file"
+    },
+    {
+      "file": "backend/tests/test_simulation.py",
+      "added": null,
+      "removed": 0,
+      "what": "14 simulation tests",
+      "old": "-",
+      "new": "new file"
+    },
+    {
+      "file": "backend/tests/test_sku_pipeline.py",
+      "added": null,
+      "removed": 0,
+      "what": "33 pipeline/API/migration tests",
+      "old": "-",
+      "new": "new file"
+    },
+    {
+      "file": "scripts/migration/*.py",
+      "added": null,
+      "removed": 0,
+      "what": "State capture, validation, logs, PDF report",
+      "old": "-",
+      "new": "new file"
+    }
+  ],
+  "rule_changes": [
+    {
+      "rule": "R1 Inventory state",
+      "before": "IF Inventory < ReorderPoint (product)",
+      "after": "Same, per urgent warehouse lane",
+      "threshold": "unchanged",
+      "why": "Urgency is per lane in the real data"
+    },
+    {
+      "rule": "R2 Preferred",
+      "before": "IF Rating >= 4.5 AND DeliveryTime <= 3d",
+      "after": "IF LeadTime <= 3d AND DefectRate <= 0.05",
+      "threshold": "no new numbers (3 d and 0.05 already existed)",
+      "why": "Rating only existed through the removed mapping; old rule could never fire (max rating 4.39, min delivery 7.9 d)"
+    },
+    {
+      "rule": "R3 High Risk",
+      "before": "IF DefectRate > 0.05",
+      "after": "Same (simulated supplier defect rate)",
+      "threshold": "unchanged",
+      "why": "-"
+    },
+    {
+      "rule": "R4 Reliable",
+      "before": "IF no status AND Reliability >= 0.90",
+      "after": "IF no status AND FulfillmentRate >= 0.90",
+      "threshold": "0.90 unchanged (not lowered)",
+      "why": "Old input was a relative min-max index; 0.90 is kept as a 90% fulfillment target. No supplier meets it (real best 82%); lowering it would classify sampling noise, since real suppliers do not differ"
+    },
+    {
+      "rule": "R5 Capacity (new)",
+      "before": "-",
+      "after": "IF AvailableQty >= RequiredQty ELSE Ineligible",
+      "threshold": "required quantity",
+      "why": "Makes every exclusion visible in the XAI trace"
+    }
+  ],
+  "api_changes": [
+    {
+      "endpoint": "POST /api/run-agent-pipeline",
+      "before": "product_id (int, required)",
+      "after": "sku_id (str); product_id \u2192 410 Gone"
+    },
+    {
+      "endpoint": "GET /api/products",
+      "before": "product list",
+      "after": "410 Gone"
+    },
+    {
+      "endpoint": "GET /api/skus",
+      "before": "-",
+      "after": "new: 50 SKUs with urgency, required qty, candidate count"
+    },
+    {
+      "endpoint": "GET /api/suppliers",
+      "before": "required_deficit",
+      "after": "sku_id (required), required_quantity (default: SKU's current need); ineligible list, provenance, weights"
+    },
+    {
+      "endpoint": "POST /api/approve-order",
+      "before": "product_id",
+      "after": "sku_id; 422 if pair not real or quantity > available_qty"
+    },
+    {
+      "endpoint": "GET /api/dashboard",
+      "before": "product alerts, e-commerce lead time",
+      "after": "SKU alerts, snapshot date, real lead time, simulated fulfillment (labelled)"
+    },
+    {
+      "endpoint": "GET /api/system-health",
+      "before": "products.urgent count",
+      "after": "urgent SKU count; table list from schema"
+    }
+  ]
+}

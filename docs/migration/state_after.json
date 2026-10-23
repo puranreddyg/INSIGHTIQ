@@ -1,0 +1,328 @@
+{
+  "label": "after",
+  "captured_at": "2026-09-27T21:22:29",
+  "csv_files": [
+    {
+      "path": "DataSets/archive (1)/clander.csv",
+      "sha256": "085b9af1967e7598e3390b82f602861a44d23b8b6cce570978e69f69581ba02c",
+      "bytes": 42458,
+      "rows": 1000,
+      "columns": 10,
+      "column_names": [
+        "date",
+        "day",
+        "month",
+        "year",
+        "quarter",
+        "weekday",
+        "week_number",
+        "Unnamed: 7",
+        "Unnamed: 8",
+        "season"
+      ]
+    },
+    {
+      "path": "DataSets/archive (1)/customer.csv",
+      "sha256": "99ccca120ca9cbcd9a82f80c3216253264e3b5c22a30ccc7fd19c9b29e314af3",
+      "bytes": 100448,
+      "rows": 1000,
+      "columns": 10,
+      "column_names": [
+        "CustomerID",
+        "FirstName",
+        "LastName",
+        "Email",
+        "PhoneNumber",
+        "Address",
+        "Unnamed: 6",
+        "Country",
+        "DateOfBirth",
+        "Gender"
+      ]
+    },
+    {
+      "path": "DataSets/archive (1)/order.csv",
+      "sha256": "1a166b6b9daa4b316fa941d0e1c3362761a00e46bae13fa8a156ecf0f651100b",
+      "bytes": 94213,
+      "rows": 1000,
+      "columns": 13,
+      "column_names": [
+        "OrderID",
+        "CustomerID",
+        "OrderDate",
+        "OrderStatus",
+        "ShippedDate",
+        "ShipAddress",
+        "Unnamed: 6",
+        "Unnamed: 7",
+        "Unnamed: 8",
+        "ShipCountry",
+        "ShippingFee",
+        "PaymentMethod",
+        "TotalAmount"
+      ]
+    },
+    {
+      "path": "DataSets/archive (1)/product.csv",
+      "sha256": "58f04efce65d724d20a3b3c2c7813c27326f081848a673eb65918a0f3fbd833c",
+      "bytes": 53393,
+      "rows": 1000,
+      "columns": 9,
+      "column_names": [
+        "ProductID",
+        "ProductName",
+        "Category",
+        "SupplierID",
+        "UnitPrice",
+        "UnitsInStock",
+        "UnitsOnOrder",
+        "ReorderLevel",
+        "Discontinued"
+      ]
+    },
+    {
+      "path": "DataSets/Procurement KPI Analysis Dataset.csv",
+      "sha256": "bf9a529c52cd7de254994a55d087f865d3aefc0ba66790e8ee43a26e7beb6e9c",
+      "bytes": 69496,
+      "rows": 777,
+      "columns": 11,
+      "column_names": [
+        "PO_ID",
+        "Supplier",
+        "Order_Date",
+        "Delivery_Date",
+        "Item_Category",
+        "Order_Status",
+        "Quantity",
+        "Unit_Price",
+        "Negotiated_Price",
+        "Defective_Units",
+        "Compliance"
+      ]
+    },
+    {
+      "path": "DataSets/simulated/evidence/order_quantity_by_pair.csv",
+      "sha256": "26ea8d5134f68c4612222b39897df52d6d3ad4ef6a5eb4a7653d9520c0eca203",
+      "bytes": 20381,
+      "rows": 211,
+      "columns": 15,
+      "column_names": [
+        "sku_id",
+        "supplier_id",
+        "n",
+        "min",
+        "max",
+        "mean",
+        "median",
+        "std",
+        "p5",
+        "p10",
+        "p25",
+        "p50",
+        "p75",
+        "p90",
+        "p95"
+      ]
+    },
+    {
+      "path": "DataSets/simulated/supplier_sku_profile.csv",
+      "sha256": "3ef2933fa9488cc1b544dea678eb8c7560dd142db30f80116fd68caacff866ab",
+      "bytes": 6563,
+      "rows": 211,
+      "columns": 5,
+      "column_names": [
+        "sku_id",
+        "supplier_id",
+        "available_qty",
+        "defect_rate",
+        "fulfillment_rate"
+      ]
+    },
+    {
+      "path": "DataSets/supply_chain_dataset1.csv",
+      "sha256": "76dad280541a60f135442f3eeb3ef4804a28e48f6a9677f63ddba236ddc80491",
+      "bytes": 6552486,
+      "rows": 91250,
+      "columns": 15,
+      "column_names": [
+        "Date",
+        "SKU_ID",
+        "Warehouse_ID",
+        "Supplier_ID",
+        "Region",
+        "Units_Sold",
+        "Inventory_Level",
+        "Supplier_Lead_Time_Days",
+        "Reorder_Point",
+        "Order_Quantity",
+        "Unit_Cost",
+        "Unit_Price",
+        "Promotion_Flag",
+        "Stockout_Flag",
+        "Demand_Forecast"
+      ]
+    }
+  ],
+  "database": {
+    "path": "data/insightiq.db",
+    "exists": true,
+    "sha256": "02bb972d496a72e9f88dd67fef01e9b7b9506bfba6273be01ffe2046ca3af9a3",
+    "user_version": 2,
+    "tables": {
+      "calendar": {
+        "rows": 935,
+        "columns": 9,
+        "column_names": [
+          "date",
+          "day",
+          "month",
+          "year",
+          "quarter",
+          "weekday",
+          "week_number",
+          "is_weekend",
+          "season"
+        ]
+      },
+      "customers": {
+        "rows": 1000,
+        "columns": 9,
+        "column_names": [
+          "customer_id",
+          "first_name",
+          "last_name",
+          "email",
+          "phone_number",
+          "address",
+          "country",
+          "date_of_birth",
+          "gender"
+        ]
+      },
+      "orders": {
+        "rows": 1000,
+        "columns": 11,
+        "column_names": [
+          "order_id",
+          "customer_id",
+          "order_date",
+          "order_status",
+          "shipped_date",
+          "ship_address",
+          "ship_country",
+          "shipping_fee",
+          "payment_method",
+          "total_amount",
+          "lead_time_days"
+        ]
+      },
+      "procurement_kpi": {
+        "rows": 777,
+        "columns": 16,
+        "column_names": [
+          "po_id",
+          "supplier",
+          "order_date",
+          "delivery_date",
+          "item_category",
+          "order_status",
+          "quantity",
+          "unit_price",
+          "negotiated_price",
+          "defective_units",
+          "compliance",
+          "delivery_days",
+          "defect_rate",
+          "cost_variance",
+          "on_time",
+          "compliant_flag"
+        ]
+      },
+      "products": {
+        "rows": 1000,
+        "columns": 9,
+        "column_names": [
+          "product_id",
+          "product_name",
+          "category",
+          "supplier_id",
+          "unit_price",
+          "units_in_stock",
+          "units_on_order",
+          "reorder_level",
+          "discontinued"
+        ]
+      },
+      "purchase_orders": {
+        "rows": 0,
+        "columns": 14,
+        "column_names": [
+          "id",
+          "product_id",
+          "product_name",
+          "supplier_id",
+          "supplier_name",
+          "quantity",
+          "unit_cost",
+          "total_cost",
+          "order_date",
+          "estimated_arrival",
+          "backup_supplier_id",
+          "status",
+          "created_at",
+          "sku_id"
+        ]
+      },
+      "sku_supplier_lanes": {
+        "rows": 250,
+        "columns": 5,
+        "column_names": [
+          "sku_id",
+          "warehouse_id",
+          "supplier_id",
+          "unit_cost",
+          "lead_time_days"
+        ]
+      },
+      "supplier_sku_profile": {
+        "rows": 211,
+        "columns": 5,
+        "column_names": [
+          "sku_id",
+          "supplier_id",
+          "available_qty",
+          "defect_rate",
+          "fulfillment_rate"
+        ]
+      },
+      "supply_chain": {
+        "rows": 91250,
+        "columns": 15,
+        "column_names": [
+          "date",
+          "sku_id",
+          "warehouse_id",
+          "supplier_id",
+          "region",
+          "units_sold",
+          "inventory_level",
+          "supplier_lead_time_days",
+          "reorder_point",
+          "order_quantity",
+          "unit_cost",
+          "unit_price",
+          "promotion_flag",
+          "stockout_flag",
+          "demand_forecast"
+        ]
+      }
+    },
+    "indexes": {
+      "idx_calendar_date": "calendar",
+      "idx_supply_chain_date": "supply_chain",
+      "idx_supply_chain_sku_date": "supply_chain",
+      "ux_lanes_sku_warehouse": "sku_supplier_lanes",
+      "ux_profile_sku_supplier": "supplier_sku_profile"
+    }
+  }
+}

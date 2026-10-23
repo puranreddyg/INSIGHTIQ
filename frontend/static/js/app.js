@@ -97,11 +97,12 @@ function staggerIn(container, selector) {
 const state = {
   view: "dashboard",
   dashboardData: null,
-  productsCache: [],
-  selectedProductId: null,
+  skusCache: [],
+  selectedSkuId: null,
   lastPipeline: null,
   lastSuppliers: null,
   approvedThisSession: null,
+  forecastSummary: null,
 };
 
 const charts = {};
@@ -142,8 +143,133 @@ function statusBadgeClass(status) {
   const map = {
     "Preferred": "badge-preferred", "High Risk": "badge-risk",
     "Standard": "badge-standard", "Reliable": "badge-reliable",
+    "Ineligible": "badge-ineligible",
   };
   return map[status] || "badge-standard";
+}
+
+// Marks a value that comes from the simulated supplier-SKU profile, not observed data.
+function simBadge() {
+  return `<span class="badge-sim" title="Simulated — DataSets/simulated/README.md">SIM</span>`;
+}
+
+// ---- multi-supplier allocation (rendered from the backend's allocation lines) --
+
+function allocationTableHtml(lines) {
+  if (!lines?.length) return "";
+  const hasArrival = lines.some((l) => l.estimated_arrival);
+  const totalQty = lines.reduce((s, l) => s + l.allocated_qty, 0);
+  const totalCost = lines.reduce((s, l) => s + l.line_cost, 0);
+  return `
+    <div class="overflow-x-auto">
+      <table class="table-clean w-full">
+        <thead><tr>
+          <th>Supplier</th><th>Allocated</th><th>Available${simBadge()}</th><th>Unit Cost</th><th>Line Cost</th>
+          ${hasArrival ? "<th>Arrival</th>" : "<th>Lead Time (d)</th>"}<th>Risk Status</th>
+        </tr></thead>
+        <tbody>
+          ${lines.map((l) => `
+            <tr>
+              <td class="font-medium text-heading">${esc(l.supplier_id)}${l.heuristic_rank ? `<div class="text-xs text-muted">heuristic rank #${l.heuristic_rank}</div>` : ""}</td>
+              <td class="tabular font-semibold text-heading">${fmtNum(l.allocated_qty)}</td>
+              <td class="tabular">${fmtNum(l.available_qty)}</td>
+              <td class="tabular">${fmtCurrency(l.unit_cost)}</td>
+              <td class="tabular">${fmtCurrency(l.line_cost)}</td>
+              <td class="tabular">${hasArrival ? fmtDate(l.estimated_arrival) : l.lead_time_days}</td>
+              <td><span class="badge ${statusBadgeClass(l.risk_status)}">${esc(l.risk_status || "—")}</span></td>
+            </tr>`).join("")}
+          <tr>
+            <td class="font-semibold text-heading">Total</td>
+            <td class="tabular font-semibold text-heading">${fmtNum(totalQty)}</td>
+            <td></td><td></td>
+            <td class="tabular font-semibold text-heading">${fmtCurrency(totalCost)}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function allocationNoticeHtml(alloc) {
+  if (!alloc) return "";
+  const reasons = alloc.shortage_reasons || [];
+  if (!alloc.residual_shortage && !reasons.length) return "";
+  return `
+    <div class="notice-warning mt-3">
+      <div class="font-semibold">${alloc.total_allocated ? "Partial allocation" : "No allocation"} — residual shortage ${fmtNum(alloc.residual_shortage)} of ${fmtNum(alloc.required_quantity)} units</div>
+      <div class="mt-1">Maximum feasible within risk rules: ${fmtNum(alloc.max_feasible_quantity)} units${simBadge()}.</div>
+      ${reasons.map((r) => `<div class="mt-1">• ${esc(r)}</div>`).join("")}
+    </div>`;
+}
+
+function quantityCalcHtml(calc) {
+  if (!calc) return "";
+  const forecast = calc.method === "forecast";
+  const cell = (label, value) => `<div><div class="text-xs text-muted">${esc(label)}</div><div class="font-medium text-heading tabular">${value}</div></div>`;
+  return `
+    <h3 class="font-semibold text-heading mt-5 mb-2 text-sm">How the Required Quantity was calculated</h3>
+    <div class="border border-soft rounded-lg p-3 text-sm">
+      <div class="text-xs text-body mb-2">Method: <span class="font-semibold text-heading">${forecast ? `forecast (${esc((calc.forecast_method || "").replace("_", " "))})` : "historical median lot size"}</span>${calc.forecast_method_reason ? ` — ${esc(calc.forecast_method_reason)}` : ""}</div>
+      ${forecast ? `
+      <div class="calc-grid">
+        ${cell("Forecast demand (L+R)", fmtNum(calc.forecast_demand))}
+        ${cell("Safety stock", fmtNum(calc.safety_stock))}
+        ${cell("Target stock", fmtNum(calc.target_stock))}
+        ${cell("Current inventory", fmtNum(calc.current_inventory))}
+        ${cell("Before rounding", fmtNum(calc.quantity_before_rounding))}
+        ${cell(`Final (×${calc.rounding})`, fmtNum(calc.final_quantity))}
+      </div>` : ""}
+      <p class="text-xs text-body mt-2">${esc(calc.explanation)}</p>
+      ${forecast ? `<p class="text-xs text-muted mt-1">Legacy median-lot method would give ${fmtNum(calc.median_method_quantity)} units.</p>` : ""}
+    </div>`;
+}
+
+function forecastSummaryHtml(fs) {
+  if (!fs) return "";
+  const v = fs.validation;
+  const label = { model: "Ridge regression model", moving_average: "28-day moving average", seasonal_naive: "Seasonal naive (weekly)" };
+  const row = (name, m) => `<tr><td>${esc(label[name] || name)}${name === fs.method ? ' <span class="badge badge-preferred">in use</span>' : ""}</td><td class="tabular">${m?.mae != null ? m.mae.toFixed(2) : "—"}</td><td class="tabular">${m?.wape != null ? (m.wape * 100).toFixed(1) + "%" : "—"}</td></tr>`;
+  return `
+    <div class="card p-5 mt-5">
+      <h2 class="font-semibold text-heading mb-1">Demand Forecast — explainable summary</h2>
+      <p class="text-xs text-body mb-3">Forecasts daily Units_Sold (REAL data) per warehouse lane. They predict demand only — supplier availability and quality stay simulated${simBadge()}.</p>
+      <div class="text-sm text-body"><span class="font-semibold text-heading">In use:</span> ${esc(label[fs.method] || fs.method)} — ${esc(fs.reason)}</div>
+      ${v ? `
+      <p class="text-xs text-muted mt-2">Chronological validation: trained on ${esc(v.train_period[0])} → ${esc(v.train_period[1])}, tested on ${esc(v.test_period[0])} → ${esc(v.test_period[1])} (${v.lanes} lanes). Lower is better; the model is only used if it wins.</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+        <div>
+          <div class="text-xs font-semibold text-heading mb-1">${v.horizon.days}-day total demand (what replenishment uses)</div>
+          <table class="table-clean w-full text-sm"><thead><tr><th>Method</th><th>MAE</th><th>WAPE</th></tr></thead>
+            <tbody>${["model", "moving_average", "seasonal_naive"].map((k) => row(k, v.horizon[k])).join("")}</tbody></table>
+        </div>
+        <div>
+          <div class="text-xs font-semibold text-heading mb-1">Next-day demand</div>
+          <table class="table-clean w-full text-sm"><thead><tr><th>Method</th><th>MAE</th><th>WAPE</th></tr></thead>
+            <tbody>${["model", "moving_average", "seasonal_naive"].map((k) => row(k, v.one_step[k])).join("")}</tbody></table>
+        </div>
+      </div>` : `<p class="text-xs text-muted mt-2">${esc(fs.artifact_error || "No validation metrics available.")}</p>`}
+    </div>`;
+}
+
+function planIsSplit(plan) {
+  return plan && (plan.allocation_mode === "split" || (plan.allocations?.length || 0) > 1);
+}
+
+async function ensureSkus() {
+  if (!state.skusCache.length) {
+    try { state.skusCache = (await Api.skus()).skus; } catch (_) {}
+  }
+  return state.skusCache;
+}
+
+function defaultSkuId() {
+  return state.selectedSkuId ?? state.skusCache.find((s) => s.urgent)?.sku_id ?? state.skusCache[0]?.sku_id;
+}
+
+function skuOptionsHtml(selected) {
+  return state.skusCache.map((s) =>
+    `<option value="${esc(s.sku_id)}" ${s.sku_id === selected ? "selected" : ""}>${s.urgent ? "⚠ " : ""}${esc(s.sku_id)} · stock ${s.inventory}/${s.reorder_point}${s.urgent ? ` · need ${s.required_quantity}` : ""}</option>`
+  ).join("");
 }
 
 // ---------------------------------------------------------------------------
@@ -208,7 +334,7 @@ function switchView(view, opts = {}) {
   if (!opts.immediate) animateViewIn(panel);
 
   if (view === "dashboard") loadDashboard();
-  if (view === "pipeline") loadPipelineView(opts.productId);
+  if (view === "pipeline") loadPipelineView(opts.skuId);
   if (view === "suppliers") loadSuppliersView();
   if (view === "action") loadActionView();
 }
@@ -292,20 +418,20 @@ function renderDashboard(data) {
     <div class="fade-in space-y-6">
       <div>
         <h1 class="page-title">Executive Enterprise Dashboard</h1>
-        <p class="text-sm text-body mt-1">Live snapshot generated ${fmtDate(data.generated_at)} · ${new Date(data.generated_at).toLocaleTimeString()}</p>
+        <p class="text-sm text-body mt-1">Supply-chain snapshot as of ${fmtDate(data.snapshot_date)} · generated ${new Date(data.generated_at).toLocaleTimeString()}</p>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        ${kpiCard("Critical Low Stock SKUs", fmtNum(k.critical_low_stock_skus), "urgent", "SKUs below reorder point")}
+        ${kpiCard("Critical Low Stock SKUs", fmtNum(k.critical_low_stock_skus), "urgent", "SKUs with a warehouse below reorder point")}
         ${kpiCard("Active Purchase Orders", fmtNum(k.active_purchase_orders), "info", "Approved & in flight")}
-        ${kpiCard("Avg Procurement Lead Time", `${k.avg_procurement_lead_time_days ?? "—"}d`, "neutral", "Order → shipped, fleet avg")}
-        ${kpiCard("Supplier Reliability Avg", `${k.avg_supplier_reliability ?? "—"}%`, "good", "Across unified supplier pool")}
+        ${kpiCard("Avg Supplier Lead Time", `${k.avg_supplier_lead_time_days ?? "—"}d`, "neutral", "Across all SKU-warehouse lanes")}
+        ${kpiCard("Avg Supplier Fulfillment", `${k.avg_supplier_fulfillment_rate ?? "—"}%`, "good", "Simulated supplier-level rate")}
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div class="card hoverable p-5 lg:col-span-2">
-          <h2 class="font-semibold text-heading mb-1">Top SKUs by Stock Deficit</h2>
-          <p class="text-xs text-body mb-3">Units needed to reach target safety stock (3× reorder point)</p>
+          <h2 class="font-semibold text-heading mb-1">Top SKUs by Required Quantity</h2>
+          <p class="text-xs text-body mb-3">Sum of each urgent warehouse's median historical order size</p>
           <div class="h-72"><canvas id="chart-deficit"></canvas></div>
         </div>
         <div class="card hoverable p-5">
@@ -318,14 +444,14 @@ function renderDashboard(data) {
         <div class="flex items-center justify-between px-5 py-4 border-b border-soft">
           <div>
             <h2 class="font-semibold text-heading">Live Alert Table</h2>
-            <p class="text-xs text-body">SKUs where Inventory &lt; Reorder Point</p>
+            <p class="text-xs text-body">SKUs with at least one warehouse where Inventory &lt; Reorder Point</p>
           </div>
           <span class="badge badge-urgent badge-live">${data.alerts.length} active alerts</span>
         </div>
         <div class="overflow-x-auto">
           <table class="table-clean w-full">
             <thead><tr>
-              <th>SKU</th><th>Product</th><th>Category</th><th>Inventory</th><th>Reorder Lvl</th><th>Deficit</th><th>Unit Price</th><th></th>
+              <th>SKU</th><th>Urgent Warehouses</th><th>Inventory</th><th>Reorder Pt</th><th>Shortfall</th><th>Required Qty</th><th>Candidate Suppliers</th><th></th>
             </tr></thead>
             <tbody>${data.alerts.map(alertRow).join("")}</tbody>
           </table>
@@ -337,13 +463,13 @@ function renderDashboard(data) {
   document.getElementById("recent-po-list").innerHTML = data.recent_purchase_orders.length
     ? data.recent_purchase_orders.map((po) => `
         <div class="border border-soft rounded-lg p-3 text-sm">
-          <div class="flex justify-between font-medium text-heading"><span>${esc(po.product_name)}</span><span class="tabular">${fmtCurrency(po.total_cost)}</span></div>
+          <div class="flex justify-between font-medium text-heading"><span>${esc(po.sku_id || po.product_name)}</span><span class="tabular">${fmtCurrency(po.total_cost)}</span></div>
           <div class="text-xs text-body mt-1">${esc(po.supplier_name)} · ${po.quantity} units · ETA ${fmtDate(po.estimated_arrival)}</div>
         </div>`).join("")
     : `<div class="text-sm text-muted text-center py-8">No purchase orders approved yet.</div>`;
 
-  root.querySelectorAll("[data-trigger-product]").forEach((btn) =>
-    btn.addEventListener("click", () => switchView("pipeline", { productId: Number(btn.dataset.triggerProduct) }))
+  root.querySelectorAll("[data-trigger-sku]").forEach((btn) =>
+    btn.addEventListener("click", () => switchView("pipeline", { skuId: btn.dataset.triggerSku }))
   );
 
   renderDeficitChart(data.alerts);
@@ -376,14 +502,14 @@ function kpiCard(label, value, tone, sub) {
 function alertRow(a) {
   return `
     <tr>
-      <td class="font-mono text-xs text-body">${esc(a.sku)}</td>
-      <td class="font-medium text-heading">${esc(a.product_name)}</td>
-      <td class="text-body">${esc(a.category)}</td>
+      <td class="font-mono text-xs font-semibold text-heading">${esc(a.sku_id)}</td>
+      <td class="text-body">${esc(a.urgent_warehouses.join(", "))}</td>
       <td class="tabular">${fmtNum(a.inventory)}</td>
-      <td class="tabular">${fmtNum(a.reorder_level)}</td>
-      <td><span class="badge badge-urgent tabular">${fmtNum(a.deficit)}</span></td>
-      <td class="tabular">${fmtCurrency(a.unit_price)}</td>
-      <td><button data-trigger-product="${a.product_id}" class="btn-primary !py-1.5 !px-3 text-xs">Trigger AI Procurement</button></td>
+      <td class="tabular">${fmtNum(a.reorder_point)}</td>
+      <td class="tabular">${fmtNum(a.shortfall)}</td>
+      <td><span class="badge badge-urgent tabular">${fmtNum(a.required_quantity)}</span></td>
+      <td class="tabular">${fmtNum(a.candidate_suppliers)}</td>
+      <td><button data-trigger-sku="${esc(a.sku_id)}" class="btn-primary !py-1.5 !px-3 text-xs">Trigger AI Procurement</button></td>
     </tr>`;
 }
 
@@ -395,10 +521,10 @@ function renderDeficitChart(alerts) {
   charts.deficit = new Chart(ctx, {
     type: "bar",
     data: {
-      labels: top.map((a) => a.sku),
+      labels: top.map((a) => a.sku_id),
       datasets: [{
-        label: "Deficit (units)",
-        data: top.map((a) => a.deficit),
+        label: "Required quantity (units)",
+        data: top.map((a) => a.required_quantity),
         backgroundColor: barGradient(pal.series1, true),
         hoverBackgroundColor: pal.series1,
         borderRadius: 4,
@@ -416,7 +542,7 @@ function renderDeficitChart(alerts) {
           callbacks: {
             label: (ctx) => {
               const a = top[ctx.dataIndex];
-              return `${a.product_name}: ${a.deficit} units short`;
+              return `${a.required_quantity} units needed (${a.urgent_warehouses.join(", ")} below reorder point)`;
             },
           },
         },
@@ -433,13 +559,11 @@ function renderDeficitChart(alerts) {
 // VIEW 2 — Interactive Multi-Agent Pipeline & XAI Inspector
 // ===========================================================================
 
-async function loadPipelineView(prefillProductId) {
+async function loadPipelineView(prefillSkuId) {
   const root = document.getElementById("view-pipeline");
-  if (!state.productsCache.length) {
-    try { state.productsCache = (await Api.products({ limit: 500 })).products; } catch (_) {}
-  }
-  const pid = prefillProductId ?? state.selectedProductId ?? (state.productsCache.find((p) => p.urgent)?.product_id);
-  state.selectedProductId = pid;
+  await ensureSkus();
+  const sid = prefillSkuId ?? defaultSkuId();
+  state.selectedSkuId = sid;
 
   root.innerHTML = `
     <div class="fade-in space-y-6">
@@ -449,7 +573,7 @@ async function loadPipelineView(prefillProductId) {
           <p class="text-sm text-body mt-1">Perception → Supplier Intelligence → Knowledge → Planning</p>
         </div>
         <div class="flex items-center gap-2">
-          <select id="product-select" class="input-field min-w-[260px]"></select>
+          <select id="sku-select" class="input-field min-w-[260px]"></select>
           <button id="run-pipeline-btn" class="btn-primary">Run Agent Pipeline</button>
         </div>
       </div>
@@ -460,22 +584,20 @@ async function loadPipelineView(prefillProductId) {
     </div>
   `;
 
-  const select = document.getElementById("product-select");
-  select.innerHTML = state.productsCache.map((p) =>
-    `<option value="${p.product_id}" ${p.product_id === pid ? "selected" : ""}>${p.urgent ? "⚠ " : ""}SKU-${String(p.product_id).padStart(4, "0")} · ${esc(p.product_name)} (stock ${p.units_in_stock}/${p.reorder_level})</option>`
-  ).join("");
+  const select = document.getElementById("sku-select");
+  select.innerHTML = skuOptionsHtml(sid);
 
   const stages = ["Perception Agent", "Supplier Intelligence Agent", "Knowledge Agent", "Planning Agent"];
-  document.getElementById("run-pipeline-btn").addEventListener("click", () => runPipeline(Number(select.value)));
+  document.getElementById("run-pipeline-btn").addEventListener("click", () => runPipeline(select.value));
 
   // Only auto-run when the user explicitly asked for it (clicked "Trigger AI
-  // Procurement" on the dashboard, which passes prefillProductId). Simply
+  // Procurement" on the dashboard, which passes prefillSkuId). Simply
   // opening this tab from the nav bar must never fire a procurement run on
   // its own — it should sit idle until "Run Agent Pipeline" is clicked.
-  if (prefillProductId) {
+  if (prefillSkuId) {
     renderAgentFlow(stages, {});
-    runPipeline(prefillProductId);
-  } else if (state.lastPipeline && state.lastPipeline.product_id === pid) {
+    runPipeline(prefillSkuId);
+  } else if (state.lastPipeline && state.lastPipeline.sku_id === sid) {
     const completed = Object.fromEntries(stages.map((s) => [s, "completed"]));
     renderAgentFlow(stages, completed);
     stages.forEach((s, i) => {
@@ -519,9 +641,9 @@ function renderAgentFlow(stages, statusMap) {
   }).join("");
 }
 
-async function runPipeline(productId) {
-  if (!productId) return;
-  state.selectedProductId = productId;
+async function runPipeline(skuId) {
+  if (!skuId) return;
+  state.selectedSkuId = skuId;
   const btn = document.getElementById("run-pipeline-btn");
   btn.disabled = true;
   btn.textContent = "Running…";
@@ -531,7 +653,7 @@ async function runPipeline(productId) {
   renderAgentStrip(stages.map((n) => ({ name: n, status: "idle" })), null);
 
   try {
-    const result = await Api.runPipeline(productId);
+    const result = await Api.runPipeline(skuId);
     state.lastPipeline = result;
 
     // Replay stage completion sequentially for a legible pipeline animation —
@@ -563,6 +685,8 @@ function renderPipelineResult(result) {
   const focus = result.focus_fact;
   const plan = result.planning;
   const rec = result.knowledge.recommended_supplier;
+  const sup = result.supplier;
+  const urgentWh = focus ? focus.lanes.filter((l) => l.Urgent).map((l) => l.warehouse_id) : [];
 
   container.innerHTML = `
     <div class="fade-in grid grid-cols-1 lg:grid-cols-2 gap-5 mt-2">
@@ -570,31 +694,42 @@ function renderPipelineResult(result) {
         <h2 class="font-semibold text-heading mb-3">Perceived State — ${focus ? esc(focus.SKU) : "N/A"}</h2>
         ${focus ? `
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <div><div class="text-xs text-muted">Product</div><div class="font-medium text-heading">${esc(focus.product_name)}</div></div>
-            <div><div class="text-xs text-muted">Inventory</div><div class="font-medium text-heading tabular">${fmtNum(focus.Inventory)}</div></div>
+            <div><div class="text-xs text-muted">Snapshot Date</div><div class="font-medium text-heading">${fmtDate(focus.snapshot_date)}</div></div>
+            <div><div class="text-xs text-muted">Urgent Warehouses</div><div class="font-medium text-heading">${urgentWh.length ? esc(urgentWh.join(", ")) : `none of ${focus.lane_count}`}</div></div>
+            <div><div class="text-xs text-muted">Inventory (${esc(focus.focus_scope)})</div><div class="font-medium text-heading tabular">${fmtNum(focus.Inventory)}</div></div>
             <div><div class="text-xs text-muted">Reorder Point</div><div class="font-medium text-heading tabular">${fmtNum(focus.ReorderPoint)}</div></div>
-            <div><div class="text-xs text-muted">Deficit</div><div class="font-medium text-danger tabular">${fmtNum(focus.Deficit)}</div></div>
+            <div><div class="text-xs text-muted">Required Quantity</div><div class="font-medium text-danger tabular">${fmtNum(focus.RequiredQuantity)}</div></div>
             <div><div class="text-xs text-muted">Status</div><div>${focus.Urgent ? '<span class="badge badge-urgent badge-live">Urgent Procurement</span>' : '<span class="badge badge-standard">Monitoring</span>'}</div></div>
-            <div><div class="text-xs text-muted">Unit Price</div><div class="font-medium text-heading tabular">${fmtCurrency(focus.UnitPrice)}</div></div>
-          </div>` : `<p class="text-sm text-muted">No focus SKU.</p>`}
+          </div>
+          ${focus.Urgent ? quantityCalcHtml(focus.quantity_calculation) : ""}` : `<p class="text-sm text-muted">No focus SKU.</p>`}
 
-        <h3 class="font-semibold text-heading mt-5 mb-2 text-sm">Recommended Supplier</h3>
-        ${rec ? `
+        <h3 class="font-semibold text-heading mt-5 mb-2 text-sm">${planIsSplit(plan) ? "Split-Order Allocation" : "Recommended Supplier"}</h3>
+        ${rec && !planIsSplit(plan) ? `
           <div class="border border-soft rounded-lg p-3 text-sm flex items-center justify-between">
             <div>
               <div class="font-medium text-heading">${esc(rec.supplier_id)}</div>
-              <div class="text-xs text-body">${esc(rec.region)} · Score ${rec.heuristic_score?.toFixed?.(1) ?? rec.heuristic_score}</div>
+              <div class="text-xs text-body">${fmtCurrency(rec.unit_cost)}/unit · ${rec.lead_time_days}d lead · ${fmtNum(rec.available_qty)} available${simBadge()} · Score ${rec.heuristic_score?.toFixed?.(1) ?? rec.heuristic_score}</div>
             </div>
             <span class="badge ${statusBadgeClass(rec.supplier_status)}">${esc(rec.supplier_status)}</span>
-          </div>` : `<p class="text-sm text-muted">No eligible supplier.</p>`}
+          </div>` : planIsSplit(plan) ? `
+          <p class="text-xs text-body mb-2">${sup.eligible_count ? "Every supplier able to cover the order alone is High Risk" : `None of the ${sup.pool_size} candidates can supply ${fmtNum(sup.required_quantity)} units alone`} (combined availability ${fmtNum(sup.combined_available_qty)}${simBadge()}). ${esc(plan.allocation?.policy || "")}</p>
+          ${allocationTableHtml(plan.allocations)}
+          ${allocationNoticeHtml(plan.allocation)}` : sup.no_eligible_supplier || plan?.status === "no_eligible_supplier" ? `
+          <div class="border border-soft rounded-lg p-3 text-sm">
+            <div class="font-medium text-danger">No supplier selected</div>
+            <div class="text-xs text-body mt-1">None of the ${sup.pool_size} candidates can supply ${fmtNum(sup.required_quantity)} units alone (combined availability ${fmtNum(sup.combined_available_qty)}${simBadge()}), and no acceptable supplier has stock for a split order.</div>
+            ${allocationNoticeHtml(plan?.allocation)}
+          </div>` : `<p class="text-sm text-muted">No supplier needed.</p>`}
+
+        ${plan && plan.error ? `<p class="text-sm text-body mt-4">${esc(plan.error)}</p>` : ""}
 
         ${plan && !plan.error ? `
-        <h3 class="font-semibold text-heading mt-5 mb-2 text-sm">Plan Snapshot</h3>
+        <h3 class="font-semibold text-heading mt-5 mb-2 text-sm">Plan Snapshot ${plan.is_partial ? '<span class="badge badge-partial">PARTIAL</span>' : ""}</h3>
         <div class="grid grid-cols-2 gap-3 text-sm">
-          <div><div class="text-xs text-muted">Order Qty</div><div class="font-medium text-heading tabular">${fmtNum(plan.order_quantity)}</div></div>
-          <div><div class="text-xs text-muted">Est. Arrival</div><div class="font-medium text-heading">${fmtDate(plan.estimated_arrival_date)}</div></div>
+          <div><div class="text-xs text-muted">Order Qty</div><div class="font-medium text-heading tabular">${fmtNum(plan.order_quantity)}${plan.is_partial ? ` of ${fmtNum(plan.required_quantity)}` : ""}</div></div>
+          <div><div class="text-xs text-muted">${planIsSplit(plan) ? "All Arrived By" : "Est. Arrival"}</div><div class="font-medium text-heading">${fmtDate(plan.estimated_arrival_date)}</div></div>
           <div><div class="text-xs text-muted">Total Expense</div><div class="font-medium text-heading tabular">${fmtCurrency(plan.total_expense)}</div></div>
-          <div><div class="text-xs text-muted">Backup Supplier</div><div class="font-medium text-heading">${esc(plan.backup_supplier_id || "—")}</div></div>
+          <div><div class="text-xs text-muted">${planIsSplit(plan) ? "Suppliers" : "Backup Supplier"}</div><div class="font-medium text-heading">${planIsSplit(plan) ? plan.allocations.length : esc(plan.backup_supplier_id || "—")}</div></div>
         </div>
         <button id="go-to-action" class="btn-primary w-full mt-4">Open in Action Hub →</button>
         ` : ""}
@@ -606,7 +741,15 @@ function renderPipelineResult(result) {
         ${renderXaiPanel()}
       </div>
     </div>
+    <div id="forecast-summary">${forecastSummaryHtml(state.forecastSummary)}</div>
   `;
+  if (!state.forecastSummary) {
+    Api.forecastMetrics().then((fs) => {
+      state.forecastSummary = fs;
+      const el = document.getElementById("forecast-summary");
+      if (el) el.innerHTML = forecastSummaryHtml(fs);
+    }).catch(() => {});
+  }
 
   document.getElementById("go-to-action")?.addEventListener("click", () => switchView("action"));
   initXaiPlayer(result);
@@ -833,10 +976,12 @@ function xaiDecisionCardHtml(block, stepsRef) {
 
 function xaiBuildReasonText(supplierBlock, finalStatus, highRisk) {
   const parts = [];
+  const r5 = supplierBlock.rules.find((r) => r.ruleId === 5);
+  if (r5) parts.push(r5.matched ? "Available quantity covers the required quantity." : "Available quantity is below the required quantity.");
   const r3 = supplierBlock.rules.find((r) => r.ruleId === 3);
   if (r3) parts.push(r3.matched ? "Defect rate exceeded the high-risk threshold." : "Defect rate did not exceed the high-risk threshold.");
-  if (finalStatus === "Preferred") parts.push("Rating and delivery time both cleared the Preferred bar.");
-  else if (finalStatus === "Reliable") parts.push("Reliability cleared the required threshold with no prior status.");
+  if (finalStatus === "Preferred") parts.push("Lead time and defect rate both cleared the Preferred bar.");
+  else if (finalStatus === "Reliable") parts.push("Fulfillment rate cleared the required threshold with no prior status.");
   else if (finalStatus === "Standard" && !highRisk) parts.push("The supplier did not satisfy the Preferred or Reliable conditions.");
   return parts.join(" ");
 }
@@ -1081,7 +1226,9 @@ function initXaiPlayer(result) {
     return;
   }
 
-  const recommendedId = result?.knowledge?.recommended_supplier?.supplier_id ?? null;
+  // Split orders have no single recommended supplier: walk through the first allocated one.
+  const recommendedId = result?.knowledge?.recommended_supplier?.supplier_id
+    ?? result?.planning?.allocations?.[0]?.supplier_id ?? null;
   const skuBlocks = blocks.filter((b) => b.entityKind === "sku");
   const primarySupplier = blocks.find((b) => b.entityKind === "supplier" && b.entity === recommendedId);
   const otherSuppliers = blocks.filter((b) => b.entityKind === "supplier" && b !== primarySupplier);
@@ -1150,7 +1297,10 @@ async function loadSuppliersView() {
       <div class="card p-5"><div class="skeleton h-64 w-full"></div></div>
     </div>`;
   try {
-    const data = await Api.suppliers(0);
+    await ensureSkus();
+    const sid = defaultSkuId();
+    const data = await Api.suppliers(sid);
+    state.selectedSkuId = sid;
     state.lastSuppliers = data;
     renderSuppliersView(data);
   } catch (e) {
@@ -1161,29 +1311,34 @@ async function loadSuppliersView() {
 function renderSuppliersView(data) {
   const root = document.getElementById("view-suppliers");
   const rows = data.ranked_candidates;
+  const w = data.weights;
+  const pct = (k) => `${(w[k] * 100).toFixed(2).replace(/\.?0+$/, "")}`;
 
   root.innerHTML = `
     <div class="fade-in space-y-6">
       <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 class="page-title">Heuristic Supplier Decision Matrix</h1>
-          <p class="text-sm text-body mt-1">H = 0.30·Rating + 0.25·Cost + 0.25·Reliability + 0.20·Delivery — each component Min-Max normalized across the eligible pool (0 = worst, 1 = best)</p>
+          <h1 class="page-title">Heuristic Supplier Decision Matrix — ${esc(data.sku_id)}</h1>
+          <p class="text-sm text-body mt-1">H = ${pct("quality")}%·Quality + ${pct("cost")}%·Cost + ${pct("fulfillment")}%·Fulfillment + ${pct("delivery")}%·Delivery — Cost and Delivery are Min-Max normalized across eligible suppliers; Quality (1 − defect rate) and Fulfillment are used as absolute rates</p>
+          <p class="text-xs text-muted mt-1">Only suppliers that actually supply this SKU in the supply-chain data are candidates. ${simBadge()} = simulated field (supplier availability and quality are not in the source data).</p>
         </div>
-        <div class="flex items-center gap-2">
-          <label class="text-xs text-body">Filter by required deficit</label>
-          <input id="deficit-filter" type="number" min="0" placeholder="e.g. 500" class="input-field w-32" />
-          <button id="apply-deficit" class="btn-secondary">Apply</button>
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="matrix-sku" class="input-field min-w-[220px]">${skuOptionsHtml(data.sku_id)}</select>
+          <label class="text-xs text-body" for="required-filter">Required qty</label>
+          <input id="required-filter" type="number" min="0" value="${data.required_quantity}" class="input-field w-28" />
+          <button id="apply-required" class="btn-secondary">Apply</button>
         </div>
       </div>
 
+      ${rows.length ? `
       <div class="card p-5">
-        <h2 class="font-semibold text-heading mb-3">Heuristic Score by Supplier</h2>
+        <h2 class="font-semibold text-heading mb-3">Heuristic Score by Eligible Supplier</h2>
         <div class="h-64"><canvas id="chart-heuristic"></canvas></div>
       </div>
 
       <div class="card p-5">
         <h2 class="font-semibold text-heading mb-1">Score Composition — the four weighted heuristic components</h2>
-        <p class="text-xs text-body mb-3">Rating 30% · Cost 25% · Reliability 25% · Delivery 20%. Click any row in the table below to see how a supplier's Raw Score was assembled.</p>
+        <p class="text-xs text-body mb-3">Click any row in the table below to see how a supplier's Raw Score was assembled.</p>
         <div class="h-72"><canvas id="chart-breakdown"></canvas></div>
       </div>
 
@@ -1191,25 +1346,66 @@ function renderSuppliersView(data) {
         <div class="overflow-x-auto">
           <table class="table-clean w-full">
             <thead><tr>
-              <th>Rank</th><th>Supplier</th><th>Region</th><th>Cost/Unit</th><th>Rating</th><th>Delivery (d)</th>
-              <th>Reliability</th><th>Defect Rate</th><th>Stock Avail.</th><th>Heuristic Score</th>
+              <th>Rank</th><th>Supplier</th><th>Unit Cost</th><th>Lead Time (d)</th>
+              <th>Available${simBadge()}</th><th>Defect Rate${simBadge()}</th><th>Fulfillment${simBadge()}</th><th>Heuristic Score</th>
             </tr></thead>
             <tbody>${rows.map(supplierRow).join("")}</tbody>
           </table>
         </div>
-      </div>
+      </div>` : `
+      <div class="card p-6 text-sm">
+        <div class="font-semibold text-danger">No single supplier can supply ${fmtNum(data.required_quantity)} units</div>
+        <p class="text-body mt-1">Combined availability across all ${data.pool_size} candidates is ${fmtNum(data.combined_available_qty)} units${simBadge()}. No supplier is ranked as a sole source${data.allocation ? " — see the split-order allocation below" : ""}.</p>
+      </div>`}
+
+      ${data.allocation ? `
+      <div class="card p-0 overflow-hidden">
+        <div class="px-5 py-4 border-b border-soft">
+          <h2 class="font-semibold text-heading">Split-Order Allocation — ${fmtNum(data.allocation.total_allocated)} of ${fmtNum(data.allocation.required_quantity)} units ${data.allocation.is_partial ? '<span class="badge badge-partial">PARTIAL</span>' : ""}</h2>
+          <p class="text-xs text-body">${data.ranked_candidates.length ? "Every supplier that can cover the order alone is High Risk, so acceptable suppliers share it. " : ""}${esc(data.allocation.policy)} Run the pipeline for arrival dates.</p>
+        </div>
+        ${allocationTableHtml(data.allocation.allocations)}
+        <div class="px-5 pb-4">${allocationNoticeHtml(data.allocation)}</div>
+      </div>` : ""}
+
+      ${data.ineligible_suppliers.length ? `
+      <div class="card p-0 overflow-hidden">
+        <div class="px-5 py-4 border-b border-soft">
+          <h2 class="font-semibold text-heading">Cannot supply ${fmtNum(data.required_quantity)} units alone</h2>
+          <p class="text-xs text-body">Not ranked as a sole source: Rule 5 (AvailableQty ≥ RequiredQty) failed.${data.allocation ? " They can still take part in the split order above unless High Risk." : ""}</p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="table-clean w-full">
+            <thead><tr><th>Supplier</th><th>Available${simBadge()}</th><th>Shortfall</th><th>Unit Cost</th><th>Lead Time (d)</th><th>Warehouses</th><th>Risk Status</th></tr></thead>
+            <tbody>${data.ineligible_suppliers.map((s) => `
+              <tr>
+                <td class="font-medium text-heading">${esc(s.supplier_id)}</td>
+                <td class="tabular">${fmtNum(s.available_qty)}</td>
+                <td class="tabular text-danger">${fmtNum(s.shortfall)}</td>
+                <td class="tabular">${fmtCurrency(s.unit_cost)}</td>
+                <td class="tabular">${s.lead_time_days}</td>
+                <td class="text-body">${esc(s.warehouses)}</td>
+                <td>${s.supplier_status ? `<span class="badge ${statusBadgeClass(s.supplier_status)}">${esc(s.supplier_status)}</span>` : "—"}</td>
+              </tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </div>` : ""}
     </div>
   `;
 
-  document.getElementById("apply-deficit").addEventListener("click", async () => {
-    const val = Number(document.getElementById("deficit-filter").value) || 0;
+  const reload = async (sku, qty) => {
     try {
-      const data = await Api.suppliers(val);
-      state.lastSuppliers = data;
-      renderSuppliersView(data);
-      toast(`Re-ranked against a ${val}-unit deficit — ${data.eligible_count}/${data.pool_size} eligible.`, "info");
-    } catch (e) { toast("Failed to re-rank suppliers.", "error"); }
-  });
+      const next = await Api.suppliers(sku, qty);
+      state.selectedSkuId = sku;
+      state.lastSuppliers = next;
+      renderSuppliersView(next);
+      toast(`${sku}: ${next.eligible_count}/${next.pool_size} suppliers can supply ${next.required_quantity} units.`, "info");
+    } catch (e) { toast("Failed to re-rank suppliers: " + e.message, "error"); }
+  };
+  document.getElementById("apply-required").addEventListener("click", () =>
+    reload(document.getElementById("matrix-sku").value, Math.max(0, Number(document.getElementById("required-filter").value) || 0))
+  );
+  document.getElementById("matrix-sku").addEventListener("change", (e) => reload(e.target.value, null));
 
   root.querySelectorAll("[data-supplier-toggle]").forEach((tr) =>
     tr.addEventListener("click", () => {
@@ -1222,8 +1418,12 @@ function renderSuppliersView(data) {
     })
   );
 
-  renderHeuristicChart(rows);
-  renderBreakdownChart(rows.slice(0, 5));
+  destroyChart("heuristic");
+  destroyChart("breakdown");
+  if (rows.length) {
+    renderHeuristicChart(rows);
+    renderBreakdownChart(rows.slice(0, 5));
+  }
   staggerIn(root, ".card");
 }
 
@@ -1231,9 +1431,9 @@ function renderSuppliersView(data) {
 // come from the backend's scoring.weights so the UI can't drift from the
 // formula the Supplier Intelligence Agent actually applied.
 const SCORE_COMPONENTS = [
-  ["rating", "Rating"],
+  ["quality", "Quality"],
   ["cost", "Cost"],
-  ["reliability", "Reliability"],
+  ["fulfillment", "Fulfillment"],
   ["delivery", "Delivery"],
 ];
 
@@ -1274,16 +1474,14 @@ function supplierRow(s) {
     <tr class="supplier-row" data-supplier-toggle="${esc(s.supplier_id)}">
       <td class="font-semibold text-heading">#${s.rank}</td>
       <td>
-        <div class="font-medium text-heading">${esc(s.supplier_id)}</div>
-        <div class="text-xs text-muted">vs ${esc(s.benchmarked_against)}</div>
+        <div class="font-medium text-heading">${esc(s.supplier_id)}${s.supplier_status ? ` <span class="badge ${statusBadgeClass(s.supplier_status)}">${esc(s.supplier_status)}</span>` : ""}</div>
+        <div class="text-xs text-muted">${esc(s.warehouses)}</div>
       </td>
-      <td class="text-body">${esc(s.region)}</td>
-      <td class="tabular">${fmtCurrency(s.avg_cost)}</td>
-      <td class="tabular">${s.rating ?? "—"} / 5</td>
-      <td class="tabular">${s.delivery_time_days}</td>
-      <td class="tabular">${(s.reliability_score * 100).toFixed(0)}%</td>
-      <td class="tabular">${s.defect_rate != null ? (s.defect_rate * 100).toFixed(1) + "%" : "—"}</td>
-      <td class="tabular">${fmtNum(Math.round(s.stock_availability))}</td>
+      <td class="tabular" title="${s.lane_count > 1 ? `mean of ${s.lane_count} warehouse lanes: ${fmtCurrency(s.unit_cost_min)}–${fmtCurrency(s.unit_cost_max)}` : "single warehouse lane"}">${fmtCurrency(s.unit_cost)}${s.lane_count > 1 ? " *" : ""}</td>
+      <td class="tabular">${s.lead_time_days}</td>
+      <td class="tabular">${fmtNum(s.available_qty)}</td>
+      <td class="tabular">${(s.defect_rate * 100).toFixed(2)}%</td>
+      <td class="tabular">${(s.fulfillment_rate * 100).toFixed(1)}%</td>
       <td>
         <div class="flex items-center gap-2">
           <div class="w-20 h-1.5 surface-2 rounded-full overflow-hidden"><div class="h-full" style="width:${pct}%; background:var(--accent)"></div></div>
@@ -1293,7 +1491,7 @@ function supplierRow(s) {
       </td>
     </tr>
     <tr class="supplier-detail-row" data-supplier-detail="${esc(s.supplier_id)}" hidden>
-      <td colspan="10">${scoreBreakdownHtml(s)}</td>
+      <td colspan="8">${scoreBreakdownHtml(s)}</td>
     </tr>`;
 }
 
@@ -1333,9 +1531,9 @@ function renderBreakdownChart(top5) {
       datasets: [
         // The four terms of the Raw Score, in weight order. Values and weights
         // both come from the backend's scoring object — nothing recomputed here.
-        { key: "rating", label: `Rating (${pctWeight(top5, "rating")})`, color: pal.series2 },
+        { key: "quality", label: `Quality (${pctWeight(top5, "quality")})`, color: pal.series2 },
         { key: "cost", label: `Cost (${pctWeight(top5, "cost")})`, color: pal.series1 },
-        { key: "reliability", label: `Reliability (${pctWeight(top5, "reliability")})`, color: pal.series4 },
+        { key: "fulfillment", label: `Fulfillment (${pctWeight(top5, "fulfillment")})`, color: pal.series4 },
         { key: "delivery", label: `Delivery (${pctWeight(top5, "delivery")})`, color: pal.series3 },
       ].map((d) => ({
         label: d.label,
@@ -1354,7 +1552,7 @@ function renderBreakdownChart(top5) {
           callbacks: {
             label: (ctx) => {
               const s = top5[ctx.dataIndex];
-              const key = ["rating", "cost", "reliability", "delivery"][ctx.datasetIndex];
+              const key = ["quality", "cost", "fulfillment", "delivery"][ctx.datasetIndex];
               if (!s?.scoring) return `${ctx.dataset.label}: —`;
               const score = s.scoring.components[key];
               const weight = s.scoring.weights[key];
@@ -1402,27 +1600,40 @@ async function loadActionView() {
   }
 
   const rec = knowledge.recommended_supplier;
+  const split = planIsSplit(plan);
+  const approveLabel = plan.is_partial
+    ? `Approve PARTIAL Order (${fmtNum(plan.order_quantity)} of ${fmtNum(plan.required_quantity)} units)`
+    : split ? `Approve Split Order (${plan.allocations.length} purchase orders)` : "One-Click Approve &amp; Execute Purchase Order";
   root.innerHTML = `
     <div class="fade-in space-y-6">
       <div>
         <h1 class="page-title">Procurement Action &amp; Approval Hub</h1>
-        <p class="text-sm text-body mt-1">Review the generated plan for ${esc(focus.SKU)} — ${esc(focus.product_name)} and execute.</p>
+        <p class="text-sm text-body mt-1">Review the generated plan for ${esc(focus.SKU)} and execute.</p>
       </div>
 
       <div class="card p-6">
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
           <div>
             <div class="text-xs text-muted uppercase tracking-wide">Complete Action Plan</div>
-            <div class="text-lg font-bold text-heading">${esc(focus.product_name)} (${esc(focus.SKU)})</div>
+            <div class="text-lg font-bold text-heading">${esc(focus.SKU)} → ${split && plan.allocations.length > 1 ? `${plan.allocations.length} suppliers (split order)` : esc(plan.primary_supplier_id)}</div>
           </div>
-          <span class="badge ${statusBadgeClass(rec?.supplier_status)}">${esc(rec?.supplier_status || "N/A")}</span>
+          ${plan.is_partial ? '<span class="badge badge-partial">PARTIAL PLAN</span>'
+            : split ? '<span class="badge badge-standard">Split Order</span>'
+            : `<span class="badge ${statusBadgeClass(rec?.supplier_status)}">${esc(rec?.supplier_status || "N/A")}</span>`}
         </div>
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           ${planStat("Recommended Order Qty", fmtNum(plan.order_quantity) + " units")}
-          ${planStat("Projected Delivery", fmtDate(plan.estimated_arrival_date))}
-          ${planStat("Backup Vendor", plan.backup_supplier_id || "—")}
+          ${planStat(split ? "All Arrived By" : "Projected Delivery", fmtDate(plan.estimated_arrival_date))}
+          ${split ? planStat("Residual Shortage", fmtNum(plan.residual_shortage) + " units") : planStat("Backup Vendor", plan.backup_supplier_id || "—")}
           ${planStat("Total Cost", fmtCurrency(plan.total_expense))}
+        </div>
+
+        <div class="mb-6">
+          <h3 class="text-sm font-semibold text-heading mb-2">Supplier Allocation</h3>
+          ${allocationTableHtml(plan.allocations)}
+          ${allocationNoticeHtml(plan.allocation)}
+          <p class="text-xs text-muted mt-2">Availability is simulated${simBadge()} — approving records purchase orders; it does not reserve live supplier stock.</p>
         </div>
 
         <div class="h-56 mb-6"><canvas id="chart-replenishment"></canvas></div>
@@ -1435,7 +1646,7 @@ async function loadActionView() {
         </div>
 
         <div class="flex items-center gap-3 mt-6">
-          <button id="approve-btn" class="btn-primary">One-Click Approve &amp; Execute Purchase Order</button>
+          <button id="approve-btn" class="btn-primary">${approveLabel}</button>
           <span id="approve-status" class="text-sm text-success font-medium"></span>
         </div>
       </div>
@@ -1444,32 +1655,37 @@ async function loadActionView() {
     </div>
   `;
 
-  renderReplenishmentChart(plan.replenishment_curve, plan.estimated_arrival_date);
+  renderReplenishmentChart(plan.replenishment_curve, plan.allocations?.map((l) => l.estimated_arrival) ?? [plan.estimated_arrival_date]);
   staggerIn(root, ".stat-tile");
 
   document.getElementById("approve-btn").addEventListener("click", async (e) => {
-    e.target.disabled = true;
-    e.target.textContent = "Processing…";
+    const btn = e.currentTarget;
+    if (plan.is_partial && !confirm(`This plan covers only ${plan.order_quantity} of ${plan.required_quantity} units (shortage ${plan.residual_shortage}). Approve it as a PARTIAL order?`)) return;
+    btn.disabled = true;
+    btn.textContent = "Processing…";
     try {
+      // The server re-validates every line (availability, risk, unit cost, total ≤ requirement)
+      // and writes all lines in one transaction.
       const payload = {
-        product_id: focus.product_id,
-        supplier_id: plan.primary_supplier_id,
-        supplier_name: rec?.supplier_id || plan.primary_supplier_id,
-        quantity: plan.order_quantity,
-        unit_cost: plan.unit_cost,
-        estimated_arrival: plan.estimated_arrival_date,
+        sku_id: focus.sku_id,
+        allocations: plan.allocations.map((l) => ({
+          supplier_id: l.supplier_id, quantity: l.allocated_qty, unit_cost: l.unit_cost, estimated_arrival: l.estimated_arrival,
+        })),
+        is_partial: !!plan.is_partial,
         backup_supplier_id: plan.backup_supplier_id,
       };
       const res = await Api.approveOrder(payload);
-      document.getElementById("approve-status").textContent = `✓ Purchase Order #${res.purchase_order.id} approved.`;
+      const ids = res.purchase_orders.map((po) => `#${po.id}`).join(", ");
+      document.getElementById("approve-status").textContent =
+        `✓ ${res.purchase_orders.length > 1 ? `Purchase orders ${ids}` : `Purchase Order ${ids}`} approved (${res.order_group}${res.is_partial ? ", partial" : ""}).`;
       toast("Purchase order approved and logged.", "success");
       const hist = (await Api.orders()).purchase_orders;
       document.querySelectorAll(".order-history-root").forEach((el) => (el.outerHTML = renderOrderHistory(hist)));
-      e.target.textContent = "Approved ✓";
+      btn.textContent = "Approved ✓";
     } catch (err) {
       toast("Failed to approve order: " + err.message, "error");
-      e.target.disabled = false;
-      e.target.textContent = "One-Click Approve & Execute Purchase Order";
+      btn.disabled = false;
+      btn.innerHTML = approveLabel;
     }
   });
 }
@@ -1478,7 +1694,8 @@ function planStat(label, value) {
   return `<div class="stat-tile"><div class="text-xs text-body">${esc(label)}</div><div class="text-xl font-bold text-heading mt-1 tabular">${value}</div></div>`;
 }
 
-function renderReplenishmentChart(curve, arrivalDate) {
+function renderReplenishmentChart(curve, arrivalDates) {
+  const arrivals = new Set(arrivalDates);
   destroyChart("replenishment");
   const pal = chartPalette();
   charts.replenishment = new Chart(document.getElementById("chart-replenishment"), {
@@ -1508,7 +1725,7 @@ function renderReplenishmentChart(curve, arrivalDate) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (ctx) => `${ctx.parsed.y} units${curve[ctx.dataIndex].date === arrivalDate ? "  (order arrives)" : ""}`,
+            label: (ctx) => `${ctx.parsed.y} units${arrivals.has(curve[ctx.dataIndex].date) ? "  (delivery arrives)" : ""}`,
           },
         },
       },
@@ -1528,18 +1745,19 @@ function renderOrderHistory(history) {
       </div>
       <div class="overflow-x-auto">
         <table class="table-clean w-full">
-          <thead><tr><th>PO #</th><th>Product</th><th>Supplier</th><th>Qty</th><th>Total Cost</th><th>ETA</th><th>Status</th></tr></thead>
+          <thead><tr><th>PO #</th><th>Order Group</th><th>SKU</th><th>Supplier</th><th>Qty</th><th>Total Cost</th><th>ETA</th><th>Status</th></tr></thead>
           <tbody>
             ${history.length ? history.map((po) => `
               <tr>
                 <td class="tabular">#${po.id}</td>
-                <td class="font-medium text-heading">${esc(po.product_name)}</td>
+                <td class="text-xs text-body">${po.order_group ? `${esc(po.order_group)}${po.allocation_count > 1 ? ` · line ${po.allocation_line}/${po.allocation_count}` : ""}` : "—"}</td>
+                <td class="font-medium text-heading">${esc(po.sku_id || po.product_name)}</td>
                 <td class="text-body">${esc(po.supplier_name)}</td>
                 <td class="tabular">${fmtNum(po.quantity)}</td>
                 <td class="tabular">${fmtCurrency(po.total_cost)}</td>
                 <td>${fmtDate(po.estimated_arrival)}</td>
-                <td><span class="badge badge-preferred">${esc(po.status)}</span></td>
-              </tr>`).join("") : `<tr><td colspan="7" class="text-center text-muted py-8">No approved purchase orders yet.</td></tr>`}
+                <td><span class="badge badge-preferred">${esc(po.status)}</span>${po.is_partial ? ' <span class="badge badge-partial">Partial</span>' : ""}</td>
+              </tr>`).join("") : `<tr><td colspan="8" class="text-center text-muted py-8">No approved purchase orders yet.</td></tr>`}
           </tbody>
         </table>
       </div>

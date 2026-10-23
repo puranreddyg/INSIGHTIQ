@@ -1,0 +1,440 @@
+{
+  "label": "before",
+  "captured_at": "2026-09-27T17:06:35",
+  "csv_files": [
+    {
+      "path": "DataSets/archive (1)/clander.csv",
+      "sha256": "085b9af1967e7598e3390b82f602861a44d23b8b6cce570978e69f69581ba02c",
+      "bytes": 42458,
+      "rows": 1000,
+      "columns": 10,
+      "column_names": [
+        "date",
+        "day",
+        "month",
+        "year",
+        "quarter",
+        "weekday",
+        "week_number",
+        "Unnamed: 7",
+        "Unnamed: 8",
+        "season"
+      ]
+    },
+    {
+      "path": "DataSets/archive (1)/customer.csv",
+      "sha256": "99ccca120ca9cbcd9a82f80c3216253264e3b5c22a30ccc7fd19c9b29e314af3",
+      "bytes": 100448,
+      "rows": 1000,
+      "columns": 10,
+      "column_names": [
+        "CustomerID",
+        "FirstName",
+        "LastName",
+        "Email",
+        "PhoneNumber",
+        "Address",
+        "Unnamed: 6",
+        "Country",
+        "DateOfBirth",
+        "Gender"
+      ]
+    },
+    {
+      "path": "DataSets/archive (1)/order.csv",
+      "sha256": "1a166b6b9daa4b316fa941d0e1c3362761a00e46bae13fa8a156ecf0f651100b",
+      "bytes": 94213,
+      "rows": 1000,
+      "columns": 13,
+      "column_names": [
+        "OrderID",
+        "CustomerID",
+        "OrderDate",
+        "OrderStatus",
+        "ShippedDate",
+        "ShipAddress",
+        "Unnamed: 6",
+        "Unnamed: 7",
+        "Unnamed: 8",
+        "ShipCountry",
+        "ShippingFee",
+        "PaymentMethod",
+        "TotalAmount"
+      ]
+    },
+    {
+      "path": "DataSets/archive (1)/product.csv",
+      "sha256": "58f04efce65d724d20a3b3c2c7813c27326f081848a673eb65918a0f3fbd833c",
+      "bytes": 53393,
+      "rows": 1000,
+      "columns": 9,
+      "column_names": [
+        "ProductID",
+        "ProductName",
+        "Category",
+        "SupplierID",
+        "UnitPrice",
+        "UnitsInStock",
+        "UnitsOnOrder",
+        "ReorderLevel",
+        "Discontinued"
+      ]
+    },
+    {
+      "path": "DataSets/Procurement KPI Analysis Dataset.csv",
+      "sha256": "bf9a529c52cd7de254994a55d087f865d3aefc0ba66790e8ee43a26e7beb6e9c",
+      "bytes": 69496,
+      "rows": 777,
+      "columns": 11,
+      "column_names": [
+        "PO_ID",
+        "Supplier",
+        "Order_Date",
+        "Delivery_Date",
+        "Item_Category",
+        "Order_Status",
+        "Quantity",
+        "Unit_Price",
+        "Negotiated_Price",
+        "Defective_Units",
+        "Compliance"
+      ]
+    },
+    {
+      "path": "DataSets/supply_chain_dataset1.csv",
+      "sha256": "76dad280541a60f135442f3eeb3ef4804a28e48f6a9677f63ddba236ddc80491",
+      "bytes": 6552486,
+      "rows": 91250,
+      "columns": 15,
+      "column_names": [
+        "Date",
+        "SKU_ID",
+        "Warehouse_ID",
+        "Supplier_ID",
+        "Region",
+        "Units_Sold",
+        "Inventory_Level",
+        "Supplier_Lead_Time_Days",
+        "Reorder_Point",
+        "Order_Quantity",
+        "Unit_Cost",
+        "Unit_Price",
+        "Promotion_Flag",
+        "Stockout_Flag",
+        "Demand_Forecast"
+      ]
+    }
+  ],
+  "database": {
+    "path": "data/insightiq.db",
+    "exists": true,
+    "sha256": "aebf50a82ed8be4875bf7e88f2cd922825a51ee43180e4905c29087a266e6951",
+    "user_version": 0,
+    "tables": {
+      "calendar": {
+        "rows": 935,
+        "columns": 9,
+        "column_names": [
+          "date",
+          "day",
+          "month",
+          "year",
+          "quarter",
+          "weekday",
+          "week_number",
+          "is_weekend",
+          "season"
+        ]
+      },
+      "customers": {
+        "rows": 1000,
+        "columns": 9,
+        "column_names": [
+          "customer_id",
+          "first_name",
+          "last_name",
+          "email",
+          "phone_number",
+          "address",
+          "country",
+          "date_of_birth",
+          "gender"
+        ]
+      },
+      "orders": {
+        "rows": 1000,
+        "columns": 11,
+        "column_names": [
+          "order_id",
+          "customer_id",
+          "order_date",
+          "order_status",
+          "shipped_date",
+          "ship_address",
+          "ship_country",
+          "shipping_fee",
+          "payment_method",
+          "total_amount",
+          "lead_time_days"
+        ]
+      },
+      "procurement_kpi": {
+        "rows": 777,
+        "columns": 16,
+        "column_names": [
+          "po_id",
+          "supplier",
+          "order_date",
+          "delivery_date",
+          "item_category",
+          "order_status",
+          "quantity",
+          "unit_price",
+          "negotiated_price",
+          "defective_units",
+          "compliance",
+          "delivery_days",
+          "defect_rate",
+          "cost_variance",
+          "on_time",
+          "compliant_flag"
+        ]
+      },
+      "products": {
+        "rows": 1000,
+        "columns": 12,
+        "column_names": [
+          "product_id",
+          "product_name",
+          "category",
+          "supplier_id",
+          "unit_price",
+          "units_in_stock",
+          "units_on_order",
+          "reorder_level",
+          "discontinued",
+          "target_stock",
+          "deficit",
+          "urgent"
+        ]
+      },
+      "purchase_orders": {
+        "rows": 0,
+        "columns": 13,
+        "column_names": [
+          "id",
+          "product_id",
+          "product_name",
+          "supplier_id",
+          "supplier_name",
+          "quantity",
+          "unit_cost",
+          "total_cost",
+          "order_date",
+          "estimated_arrival",
+          "backup_supplier_id",
+          "status",
+          "created_at"
+        ]
+      },
+      "supplier_profiles": {
+        "rows": 10,
+        "columns": 13,
+        "column_names": [
+          "supplier_id",
+          "supplier_name",
+          "benchmarked_against",
+          "region",
+          "sku_count",
+          "avg_cost",
+          "delivery_time_days",
+          "avg_lead_time",
+          "reliability_score",
+          "stock_availability",
+          "rating",
+          "defect_rate",
+          "cost_variance"
+        ]
+      },
+      "supply_chain": {
+        "rows": 91250,
+        "columns": 15,
+        "column_names": [
+          "date",
+          "sku_id",
+          "warehouse_id",
+          "supplier_id",
+          "region",
+          "units_sold",
+          "inventory_level",
+          "supplier_lead_time_days",
+          "reorder_point",
+          "order_quantity",
+          "unit_cost",
+          "unit_price",
+          "promotion_flag",
+          "stockout_flag",
+          "demand_forecast"
+        ]
+      }
+    },
+    "indexes": {
+      "idx_calendar_date": "calendar",
+      "idx_products_urgent": "products"
+    },
+    "supplier_profiles_snapshot": [
+      {
+        "supplier_id": "SUP_1",
+        "supplier_name": "SUP_1 (Alpha Inc network)",
+        "benchmarked_against": "Alpha_Inc",
+        "region": "South",
+        "sku_count": 23,
+        "avg_cost": 11.84607142857143,
+        "delivery_time_days": 8.9,
+        "avg_lead_time": 8.107142857142858,
+        "reliability_score": 0.752,
+        "stock_availability": 11867,
+        "rating": 4.39,
+        "defect_rate": 0.0236,
+        "cost_variance": 0.08210459046725577
+      },
+      {
+        "supplier_id": "SUP_10",
+        "supplier_name": "SUP_10 (Gamma Co network)",
+        "benchmarked_against": "Gamma_Co",
+        "region": "North",
+        "sku_count": 21,
+        "avg_cost": 12.525925925925925,
+        "delivery_time_days": 8.2,
+        "avg_lead_time": 7.407407407407407,
+        "reliability_score": 0.572,
+        "stock_availability": 12549,
+        "rating": 4.16,
+        "defect_rate": 0.0502,
+        "cost_variance": 0.07984856237474705
+      },
+      {
+        "supplier_id": "SUP_2",
+        "supplier_name": "SUP_2 (Beta Supplies network)",
+        "benchmarked_against": "Beta_Supplies",
+        "region": "East",
+        "sku_count": 21,
+        "avg_cost": 11.393846153846155,
+        "delivery_time_days": 9.3,
+        "avg_lead_time": 8.423076923076923,
+        "reliability_score": 0.5,
+        "stock_availability": 12604,
+        "rating": 3.9,
+        "defect_rate": 0.0978,
+        "cost_variance": 0.07827699224791057
+      },
+      {
+        "supplier_id": "SUP_3",
+        "supplier_name": "SUP_3 (Delta Logistics network)",
+        "benchmarked_against": "Delta_Logistics",
+        "region": "East",
+        "sku_count": 20,
+        "avg_cost": 11.971739130434782,
+        "delivery_time_days": 9.0,
+        "avg_lead_time": 8.26086956521739,
+        "reliability_score": 0.5,
+        "stock_availability": 11167,
+        "rating": 3.6,
+        "defect_rate": 0.1463,
+        "cost_variance": 0.07811976922617339
+      },
+      {
+        "supplier_id": "SUP_4",
+        "supplier_name": "SUP_4 (Epsilon Group network)",
+        "benchmarked_against": "Epsilon_Group",
+        "region": "North",
+        "sku_count": 22,
+        "avg_cost": 13.2612,
+        "delivery_time_days": 9.3,
+        "avg_lead_time": 8.64,
+        "reliability_score": 1.0,
+        "stock_availability": 11498,
+        "rating": 4.37,
+        "defect_rate": 0.0307,
+        "cost_variance": 0.0804052050724539
+      },
+      {
+        "supplier_id": "SUP_5",
+        "supplier_name": "SUP_5 (Gamma Co network)",
+        "benchmarked_against": "Gamma_Co",
+        "region": "South",
+        "sku_count": 21,
+        "avg_cost": 10.964347826086955,
+        "delivery_time_days": 7.9,
+        "avg_lead_time": 6.956521739130435,
+        "reliability_score": 0.872,
+        "stock_availability": 11479,
+        "rating": 4.16,
+        "defect_rate": 0.0502,
+        "cost_variance": 0.07984856237474705
+      },
+      {
+        "supplier_id": "SUP_6",
+        "supplier_name": "SUP_6 (Alpha Inc network)",
+        "benchmarked_against": "Alpha_Inc",
+        "region": "South",
+        "sku_count": 16,
+        "avg_cost": 12.882000000000001,
+        "delivery_time_days": 8.7,
+        "avg_lead_time": 7.9,
+        "reliability_score": 0.758,
+        "stock_availability": 8871,
+        "rating": 4.39,
+        "defect_rate": 0.0236,
+        "cost_variance": 0.08210459046725577
+      },
+      {
+        "supplier_id": "SUP_7",
+        "supplier_name": "SUP_7 (Beta Supplies network)",
+        "benchmarked_against": "Beta_Supplies",
+        "region": "North",
+        "sku_count": 29,
+        "avg_cost": 11.644411764705882,
+        "delivery_time_days": 8.7,
+        "avg_lead_time": 7.5588235294117645,
+        "reliability_score": 0.5,
+        "stock_availability": 16017,
+        "rating": 3.9,
+        "defect_rate": 0.0978,
+        "cost_variance": 0.07827699224791057
+      },
+      {
+        "supplier_id": "SUP_8",
+        "supplier_name": "SUP_8 (Delta Logistics network)",
+        "benchmarked_against": "Delta_Logistics",
+        "region": "East",
+        "sku_count": 22,
+        "avg_cost": 14.21642857142857,
+        "delivery_time_days": 9.2,
+        "avg_lead_time": 8.5,
+        "reliability_score": 0.5,
+        "stock_availability": 11297,
+        "rating": 3.6,
+        "defect_rate": 0.1463,
+        "cost_variance": 0.07811976922617339
+      },
+      {
+        "supplier_id": "SUP_9",
+        "supplier_name": "SUP_9 (Epsilon Group network)",
+        "benchmarked_against": "Epsilon_Group",
+        "region": "South",
+        "sku_count": 16,
+        "avg_cost": 10.876875,
+        "delivery_time_days": 9.0,
+        "avg_lead_time": 8.1875,
+        "reliability_score": 0.597,
+        "stock_availability": 6670,
+        "rating": 4.37,
+        "defect_rate": 0.0307,
+        "cost_variance": 0.0804052050724539
+      }
+    ],
+    "products_urgent": 53,
+    "products_urgent_discontinued": 26
+  }
+}

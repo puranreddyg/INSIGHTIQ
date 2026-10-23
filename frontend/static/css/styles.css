@@ -299,6 +299,12 @@ html.dark .theme-toggle .icon-sun { opacity: 1; transform: rotate(0deg) scale(1)
 .badge-standard { background: var(--info-soft); color: var(--info); }
 .badge-reliable { background: #c3f2e4; color: #0a5f56; }
 html.dark .badge-reliable { background: #0f2e28; color: #4fd1c5; }
+.badge-ineligible { background: var(--surface-2); color: var(--text-muted); text-decoration: line-through; }
+.badge-partial { background: var(--warning-soft); color: var(--warning); }
+.notice-warning { border-left: 3px solid var(--warning); background: var(--warning-soft); border-radius: 8px; padding: 0.6rem 0.8rem; font-size: 0.8rem; }
+.notice-warning { color: var(--heading); }
+.calc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.5rem 0.75rem; }
+.badge-sim { display:inline-flex; align-items:center; margin-left:0.3rem; padding:0 0.35rem; border-radius:4px; font-size:0.6rem; font-weight:700; letter-spacing:.05em; vertical-align:middle; background: var(--warning-soft); color: var(--warning); cursor: help; }
 .badge-idle { background: var(--surface-2); color: var(--text-muted); }
 .badge-active { background: var(--warning-soft); color: var(--warning); }
 .badge-completed { background: var(--success-soft); color: var(--success); }

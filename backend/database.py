@@ -1,6 +1,7 @@
 """
-Data ingestion layer: loads the 6 raw CSVs, cleans them, and materializes
-cleaned + derived tables into a local SQLite database for fast agent queries.
+Data ingestion layer: loads the 6 raw CSVs plus the simulated supplier-SKU
+profile, cleans them, and materializes cleaned + derived tables into a local
+SQLite database for fast agent queries. Raw CSVs are only ever read.
 
 Run standalone (`python backend/database.py`) to (re)build data/insightiq.db.
 """
@@ -9,7 +10,6 @@ from __future__ import annotations
 import sqlite3
 from contextlib import contextmanager
 
-import numpy as np
 import pandas as pd
 
 from backend import config
@@ -46,17 +46,15 @@ def connect():
 # ---------------------------------------------------------------------------
 
 def _load_products() -> pd.DataFrame:
+    """Reference only. product.csv has no link to any supplier or SKU (its
+    SupplierID equals ProductID on every row), so it takes no part in
+    procurement and carries no derived urgency/deficit columns."""
     df = pd.read_csv(config.CSV_PATHS["product"])
     df = _drop_unnamed(df)
     df["Discontinued"] = df["Discontinued"].astype(bool)
-    df["ReorderLevel"] = df["ReorderLevel"].clip(lower=1)
-    df["TargetStock"] = df["ReorderLevel"] * config.TARGET_STOCK_MULTIPLIER
-    df["Deficit"] = (df["TargetStock"] - df["UnitsInStock"]).clip(lower=0)
-    df["Urgent"] = df["UnitsInStock"] < df["ReorderLevel"]
     df.columns = [
         "product_id", "product_name", "category", "supplier_id", "unit_price",
         "units_in_stock", "units_on_order", "reorder_level", "discontinued",
-        "target_stock", "deficit", "urgent",
     ]
     return df
 
@@ -153,84 +151,46 @@ def _load_supply_chain() -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Derived: unified supplier profile pool
+# Derived: SKU-supplier lanes (REAL) and supplier-SKU profile (SIMULATED)
 # ---------------------------------------------------------------------------
 
-def _build_supplier_profiles(kpi: pd.DataFrame, supply_chain: pd.DataFrame) -> pd.DataFrame:
-    """Bridges two disjoint supplier ID spaces.
+LANE_ATTRIBUTES = ["supplier_id", "unit_cost", "supplier_lead_time_days"]
 
-    supply_chain_dataset1.csv models a *live* catalog of 10 numeric supplier
-    IDs (SUP_1..SUP_10) with real-time pricing/stock/lead-time telemetry, but
-    carries no quality/rating signal. The Procurement KPI dataset models 5
-    *named* legacy vendors (Alpha_Inc, Beta_Supplies, ...) with rich quality
-    history (defect rate, compliance, cost variance) but no live stock/price.
-    Neither dataset shares a join key with the other, so we deterministically
-    round-robin-assign each live SUP_x a named-vendor KPI benchmark to
-    reconstruct a single queryable supplier pool with both live logistics
-    data and historical quality data, exactly as the Supplier Intelligence
-    Agent needs for heuristic ranking.
-    """
-    sc_g = supply_chain.groupby("supplier_id").agg(
-        avg_cost=("unit_cost", "mean"),
-        avg_lead_time=("supplier_lead_time_days", "mean"),
-        lead_time_std=("supplier_lead_time_days", "std"),
-        avg_forecast_error=("demand_forecast", "mean"),
-        region=("region", lambda s: s.mode().iat[0] if not s.mode().empty else "Unknown"),
-        sku_count=("sku_id", "nunique"),
-    ).reset_index()
 
-    latest_date = supply_chain["date"].max()
-    latest_stock = (
-        supply_chain[supply_chain["date"] == latest_date]
-        .groupby("supplier_id")["inventory_level"].sum()
-        .rename("stock_availability")
-        .reset_index()
+def _build_sku_supplier_lanes(supply_chain: pd.DataFrame) -> pd.DataFrame:
+    """One row per (SKU, warehouse) lane with its supplier's real unit cost and
+    lead time. These never change over the year in the source, so collapsing the
+    365 daily rows is lossless; if that ever stops being true, fail loudly rather
+    than silently averaging."""
+    lanes = supply_chain.groupby(["sku_id", "warehouse_id"])[LANE_ATTRIBUTES]
+    varying = lanes.nunique().gt(1).any(axis=1)
+    if varying.any():
+        raise ValueError(f"lane attributes vary over time for {list(varying[varying].index)[:5]}")
+    return (
+        lanes.first().reset_index()
+        .rename(columns={"supplier_lead_time_days": "lead_time_days"})
+        [["sku_id", "warehouse_id", "supplier_id", "unit_cost", "lead_time_days"]]
     )
-    sc_g = sc_g.merge(latest_stock, on="supplier_id", how="left")
-    sc_g["stock_availability"] = sc_g["stock_availability"].fillna(sc_g["avg_cost"] * 0).fillna(0)
 
-    lo, hi = sc_g["lead_time_std"].min(), sc_g["lead_time_std"].max()
-    span = (hi - lo) if hi > lo else 1.0
-    sc_g["reliability_score"] = 1.0 - ((sc_g["lead_time_std"] - lo) / span)
-    sc_g["reliability_score"] = sc_g["reliability_score"].clip(0.5, 1.0).round(3)
 
-    kpi_g = kpi.groupby("supplier").agg(
-        fulfillment_rate=("on_time", "mean"),
-        compliance_rate=("compliant_flag", "mean"),
-        defect_rate=("defect_rate", "mean"),
-        cost_variance=("cost_variance", "mean"),
-        avg_delivery_days=("delivery_days", "mean"),
-    ).reset_index()
-    kpi_g["rating"] = (
-        5 * (0.4 * kpi_g["fulfillment_rate"] + 0.3 * kpi_g["compliance_rate"]
-             + 0.3 * (1 - kpi_g["defect_rate"].clip(0, 1)))
-    ).clip(1, 5).round(2)
-    kpi_g["defect_rate"] = kpi_g["defect_rate"].round(4)
+PROFILE_COLUMNS = ["sku_id", "supplier_id", "available_qty", "defect_rate", "fulfillment_rate"]
 
-    named_suppliers = sorted(kpi_g["supplier"].unique())
-    live_suppliers = sorted(sc_g["supplier_id"].unique(), key=lambda s: int(s.split("_")[1]))
-    mapping = {sup: named_suppliers[i % len(named_suppliers)] for i, sup in enumerate(live_suppliers)}
-    sc_g["benchmarked_against"] = sc_g["supplier_id"].map(mapping)
 
-    profiles = sc_g.merge(
-        kpi_g[["supplier", "rating", "defect_rate", "cost_variance", "avg_delivery_days"]],
-        left_on="benchmarked_against", right_on="supplier", how="left",
-    ).drop(columns=["supplier"])
-
-    profiles["supplier_name"] = profiles["supplier_id"] + " (" + profiles["benchmarked_against"].str.replace("_", " ") + " network)"
-    profiles = profiles.rename(columns={"avg_delivery_days": "kpi_delivery_days"})
-    # Blend live logistics lead time (authoritative, current) with historical
-    # KPI delivery days for a stabilized delivery-time estimate.
-    profiles["delivery_time_days"] = (
-        0.7 * profiles["avg_lead_time"] + 0.3 * profiles["kpi_delivery_days"].fillna(profiles["avg_lead_time"])
-    ).round(1)
-
-    cols = [
-        "supplier_id", "supplier_name", "benchmarked_against", "region", "sku_count",
-        "avg_cost", "delivery_time_days", "avg_lead_time", "reliability_score",
-        "stock_availability", "rating", "defect_rate", "cost_variance",
-    ]
-    return profiles[cols].sort_values("supplier_id").reset_index(drop=True)
+def _load_supplier_sku_profile(supply_chain: pd.DataFrame) -> pd.DataFrame:
+    """Load the supplier-SKU profile (simulated today, ERP-fed later) and reject
+    anything that would invent a relationship or carry impossible values."""
+    df = pd.read_csv(config.CSV_PATHS["supplier_sku_profile"])
+    if list(df.columns) != PROFILE_COLUMNS:
+        raise ValueError(f"supplier_sku_profile columns {list(df.columns)} != {PROFILE_COLUMNS}")
+    if df.duplicated(["sku_id", "supplier_id"]).any():
+        raise ValueError("supplier_sku_profile has duplicate (sku_id, supplier_id) rows")
+    real_pairs = set(map(tuple, supply_chain[["sku_id", "supplier_id"]].drop_duplicates().to_numpy()))
+    invented = [p for p in map(tuple, df[["sku_id", "supplier_id"]].to_numpy()) if p not in real_pairs]
+    if invented:
+        raise ValueError(f"supplier_sku_profile contains pairs absent from supply_chain: {invented[:5]}")
+    if (df["available_qty"] < 0).any() or not df[["defect_rate", "fulfillment_rate"]].stack().between(0, 1).all():
+        raise ValueError("supplier_sku_profile contains out-of-range values")
+    return df
 
 
 # ---------------------------------------------------------------------------
@@ -239,50 +199,94 @@ def _build_supplier_profiles(kpi: pd.DataFrame, supply_chain: pd.DataFrame) -> p
 
 TABLES_TO_BUILD = [
     "products", "orders", "customers", "calendar", "procurement_kpi",
-    "supply_chain", "supplier_profiles",
+    "supply_chain", "sku_supplier_lanes", "supplier_sku_profile",
 ]
+
+# Removed in schema v2: built on an unsupported round-robin mapping of KPI
+# vendors onto SUP_x (docs/migration/DELETION_LOG.md).
+OBSOLETE_TABLES = ["supplier_profiles"]
+OBSOLETE_INDEXES = ["idx_products_urgent"]
+
+
+def _schema_version(conn: sqlite3.Connection) -> int:
+    return conn.execute("PRAGMA user_version").fetchone()[0]
+
+
+def _ensure_purchase_orders(conn: sqlite3.Connection) -> None:
+    """Create the PO table, or migrate an existing one in place so previously
+    approved purchase orders are kept."""
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS purchase_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sku_id TEXT,
+            product_id INTEGER,
+            product_name TEXT,
+            supplier_id TEXT,
+            supplier_name TEXT,
+            quantity INTEGER,
+            unit_cost REAL,
+            total_cost REAL,
+            order_date TEXT,
+            estimated_arrival TEXT,
+            backup_supplier_id TEXT,
+            status TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""
+    )
+    columns = {r[1] for r in conn.execute("PRAGMA table_info(purchase_orders)").fetchall()}
+    for name, sql_type in PURCHASE_ORDER_ADDED_COLUMNS.items():
+        if name not in columns:
+            conn.execute(f"ALTER TABLE purchase_orders ADD COLUMN {name} {sql_type}")
+
+
+# Columns added after the first schema. A split order is one row per supplier
+# sharing an order_group; a legacy single-supplier PO is a group of one.
+PURCHASE_ORDER_ADDED_COLUMNS = {
+    "sku_id": "TEXT",
+    "order_group": "TEXT",
+    "allocation_line": "INTEGER",
+    "allocation_count": "INTEGER",
+    "required_quantity": "INTEGER",
+    "is_partial": "INTEGER DEFAULT 0",
+    "risk_status": "TEXT",
+}
 
 
 def build_database(force: bool = False) -> None:
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     if config.DB_PATH.exists() and not force:
-        return
+        with connect() as conn:
+            if _schema_version(conn) == config.SCHEMA_VERSION:
+                _ensure_purchase_orders(conn)
+                conn.commit()
+                return
 
-    products = _load_products()
-    orders = _load_orders()
-    customers = _load_customers()
-    calendar = _load_calendar()
-    kpi = _load_procurement_kpi()
     supply_chain = _load_supply_chain()
-    supplier_profiles = _build_supplier_profiles(kpi, supply_chain)
+    tables = {
+        "products": _load_products(),
+        "orders": _load_orders(),
+        "customers": _load_customers(),
+        "calendar": _load_calendar(),
+        "procurement_kpi": _load_procurement_kpi(),
+        "supply_chain": supply_chain,
+        "sku_supplier_lanes": _build_sku_supplier_lanes(supply_chain),
+        "supplier_sku_profile": _load_supplier_sku_profile(supply_chain),
+    }
 
     with connect() as conn:
-        products.to_sql("products", conn, if_exists="replace", index=False)
-        orders.to_sql("orders", conn, if_exists="replace", index=False)
-        customers.to_sql("customers", conn, if_exists="replace", index=False)
-        calendar.to_sql("calendar", conn, if_exists="replace", index=False)
-        kpi.to_sql("procurement_kpi", conn, if_exists="replace", index=False)
-        supply_chain.to_sql("supply_chain", conn, if_exists="replace", index=False)
-        supplier_profiles.to_sql("supplier_profiles", conn, if_exists="replace", index=False)
-        conn.execute(
-            """CREATE TABLE IF NOT EXISTS purchase_orders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                product_id INTEGER,
-                product_name TEXT,
-                supplier_id TEXT,
-                supplier_name TEXT,
-                quantity INTEGER,
-                unit_cost REAL,
-                total_cost REAL,
-                order_date TEXT,
-                estimated_arrival TEXT,
-                backup_supplier_id TEXT,
-                status TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )"""
-        )
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_products_urgent ON products(urgent)")
+        for name, df in tables.items():
+            df.to_sql(name, conn, if_exists="replace", index=False)
+        for name in OBSOLETE_INDEXES:
+            conn.execute(f"DROP INDEX IF EXISTS {name}")
+        for name in OBSOLETE_TABLES:
+            conn.execute(f"DROP TABLE IF EXISTS {name}")
+        _ensure_purchase_orders(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_calendar_date ON calendar(date)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_supply_chain_date ON supply_chain(date)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_supply_chain_sku_date ON supply_chain(sku_id, date)")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_lanes_sku_warehouse ON sku_supplier_lanes(sku_id, warehouse_id)")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_profile_sku_supplier ON supplier_sku_profile(sku_id, supplier_id)")
+        conn.execute(f"PRAGMA user_version = {config.SCHEMA_VERSION}")
         conn.commit()
 
 
