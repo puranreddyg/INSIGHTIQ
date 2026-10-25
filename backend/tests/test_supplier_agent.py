@@ -187,15 +187,108 @@ def test_available_equal_to_required_is_eligible():
     assert rank([supplier("EXACT", avail=350)], required=350)["eligible_count"] == 1
 
 
-def test_min_max_ignores_ineligible_suppliers():
-    """An excluded supplier must not stretch the Min/Max of the eligible pool."""
+def test_min_max_uses_the_whole_scorable_pool_not_only_full_order_suppliers():
+    """Workflow step 1: EVERY scorable supplier is scored together, so a supplier short of the full
+    order still takes part in the Min/Max and appears in the complete ranking (labelled, not hidden)."""
     result = rank(
         [supplier("A", cost=10.0, avail=900), supplier("B", cost=12.0, avail=900),
          supplier("CHEAP_BUT_SHORT", cost=1.0, avail=10)],
         required=500,
     )
-    assert components(result, "A")["cost"] == pytest.approx(1.0)
-    assert components(result, "B")["cost"] == pytest.approx(0.0)
+    ranking = {c["supplier_id"]: c for c in result["scored_ranking"]}
+    assert set(ranking) == {"A", "B", "CHEAP_BUT_SHORT"}
+    assert ranking["CHEAP_BUT_SHORT"]["scoring"]["components"]["cost"] == pytest.approx(1.0)
+    assert ranking["B"]["scoring"]["components"]["cost"] == pytest.approx(0.0)
+    assert ranking["CHEAP_BUT_SHORT"]["eligibility_status"] == "Insufficient capacity for full order"
+    assert ranking["A"]["eligibility_status"] == "Eligible for full order"
+
+
+def test_complete_ranking_is_sorted_by_score_not_by_capacity_and_eligible_keeps_original_rank():
+    rows = [supplier("BEST_SHORT", cost=5.0, lead=2.0, defect=0.01, fulfillment=0.95, avail=100),
+            supplier("MID_BIG", cost=10.0, lead=5.0, defect=0.03, fulfillment=0.80, avail=900),
+            supplier("WORST_BIG", cost=20.0, lead=9.0, defect=0.10, fulfillment=0.60, avail=2_000)]
+    r = rank(rows, required=500)
+    assert [c["supplier_id"] for c in r["scored_ranking"]] == ["BEST_SHORT", "MID_BIG", "WORST_BIG"]
+    assert [c["rank"] for c in r["scored_ranking"]] == [1, 2, 3]
+    scores = [c["heuristic_score"] for c in r["scored_ranking"]]
+    assert scores == sorted(scores, reverse=True)
+    # eligible list: same order, original ranks kept (BEST_SHORT is rank 1 overall but cannot supply 500)
+    assert [(c["supplier_id"], c["rank"], c["eligible_position"]) for c in r["eligible_single"]] == [("MID_BIG", 2, 1), ("WORST_BIG", 3, 2)]
+    assert r["ranked_candidates"] == r["eligible_single"]
+    assert [c["supplier_id"] for c in r["ineligible_suppliers"]] == ["BEST_SHORT"]
+
+
+def test_non_scorable_suppliers_are_listed_with_a_reason_and_never_scored():
+    good = supplier("GOOD")
+    bad = supplier("BAD"); bad["profile"]["defect_rate"] = None
+    r = rank([good, bad], required=100)
+    assert [x["supplier_id"] for x in r["non_scorable"]] == ["BAD"]
+    assert "defect_rate" in r["non_scorable"][0]["missing_fields"]
+    assert r["non_scorable"][0]["status"] == "Not scorable"
+    assert "BAD" not in {c["supplier_id"] for c in r["scored_ranking"]}
+
+
+def test_every_eligible_supplier_is_evaluated_not_only_the_top_five():
+    rows = [supplier(f"S{i}", cost=5.0 + i, lead=2.0 + i * 0.1) for i in range(8)]
+    r = rank(rows, required=100)
+    assert len(r["ranked_candidates"]) == 8
+
+
+def test_single_supplier_evaluation_is_chronological_and_stops_at_first_pass():
+    """High Risk #1 is rejected with its reason, #2 (over budget) is rejected, #3 is selected;
+    #4 is only a labelled backup evaluation."""
+    rows = [supplier("RISKY", cost=5.0, lead=2.0, defect=0.09, fulfillment=0.95),
+            supplier("PRICEY", cost=30.0, lead=2.5, defect=0.01, fulfillment=0.95),
+            supplier("GOOD", cost=8.0, lead=3.0, defect=0.02, fulfillment=0.90),
+            supplier("LAST", cost=9.0, lead=6.0, defect=0.02, fulfillment=0.70)]
+    sup = rank(rows, required=100, budget=1_500.0)
+    ev = knowledge_agent.run({"focus_facts": []}, sup)["single_supplier_evaluation"]
+    order = [(e["supplier_id"], e["outcome"]) for e in ev["evaluations"]]
+    sel = [e for e in ev["evaluations"] if e["phase"] == "selection"]
+    assert sel[-1]["outcome"] == "SELECTED" and ev["selected_supplier_id"] == sel[-1]["supplier_id"]
+    assert all(e["outcome"] == "REJECTED" for e in sel[:-1])
+    assert [e["step"] for e in ev["evaluations"]] == list(range(1, len(order) + 1))
+    # supplier order is the heuristic order
+    assert [e["supplier_id"] for e in ev["evaluations"]] == [c["supplier_id"] for c in sup["eligible_single"]]
+    risky = next(e for e in ev["evaluations"] if e["supplier_id"] == "RISKY")
+    assert risky["status"] == "High Risk" and any("High Risk" in r for r in risky["reasons"])
+    pricey = next(e for e in ev["evaluations"] if e["supplier_id"] == "PRICEY")
+    assert any("Over budget" in r for r in pricey["reasons"])
+    # backups come only after the selection and are labelled
+    after = ev["evaluations"][len(sel):]
+    assert all(e["phase"] == "backup_evaluation" for e in after)
+
+
+def test_each_rule_trace_entry_follows_its_own_supplier_fact():
+    """R7 must be written next to the supplier it was evaluated for (it used to be appended after all suppliers)."""
+    rows = [supplier("A", cost=5.0, defect=0.09), supplier("B", cost=6.0, defect=0.01)]
+    k = knowledge_agent.run({"focus_facts": []}, rank(rows, required=100, budget=1_000.0))
+    current = None
+    for e in k["reasoning_trace"]:
+        if e["type"] == "fact" and e["entityKind"] == "supplier":
+            current = e["entity"]
+        elif e["type"] == "rule" and e["ruleId"] in (2, 3, 4, 5, 7) and e.get("phase") in ("selection", "backup_evaluation"):
+            assert e["entity"] == current
+
+
+def test_case_a_when_no_supplier_has_the_capacity():
+    rows = [supplier("A", avail=100), supplier("B", avail=150)]
+    k = knowledge_agent.run({"focus_facts": []}, rank(rows, required=200))
+    ev = k["single_supplier_evaluation"]
+    assert ev["case"] == "A" and ev["eligible_list"] == []
+    assert ev["eligible_empty_message"] == "No supplier has sufficient capacity to fulfil the complete order individually."
+    assert ev["headline"].startswith("NO SINGLE-SUPPLIER SOLUTION")
+    assert ev["transition_message"] == "Starting multi-supplier allocation because no valid single-supplier solution was found."
+    assert k["search_trace"]["events"][0]["type"] == "search_started"
+
+
+def test_case_b_when_capacity_exists_but_every_supplier_is_rejected():
+    rows = [supplier("R1", defect=0.09), supplier("R2", defect=0.08, cost=11.0)]
+    k = knowledge_agent.run({"focus_facts": []}, rank(rows, required=100))
+    ev = k["single_supplier_evaluation"]
+    assert ev["case"] == "B" and ev["headline"].startswith("NO ACCEPTABLE SINGLE-SUPPLIER SOLUTION")
+    assert len(ev["reasons"]) == 2 and all("High Risk" in r for r in ev["reasons"])
+    assert ev["transition_message"].startswith("Starting multi-supplier allocation")
 
 
 def test_no_eligible_supplier_is_never_named_a_sole_supplier_but_the_order_is_split():

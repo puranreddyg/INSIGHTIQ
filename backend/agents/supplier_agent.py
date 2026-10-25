@@ -16,10 +16,12 @@ A supplier serves an SKU at 1–3 warehouses; when it serves several, cost and
 lead time differ per warehouse and procurement requests have no warehouse, so
 the arithmetic mean is used and min/max/lane count are kept alongside it.
 
-Eligibility:  available_qty >= required_quantity. Ineligible suppliers are
-reported with their shortfall and never scored or recommended.
+Eligibility:  available_qty >= required_quantity decides who can supply the WHOLE order
+alone. Every scorable supplier is scored and ranked together (capacity does not change
+the order); suppliers short of the full order stay in the ranking, labelled with their
+shortfall, and are never recommended as a sole supplier.
 
-Heuristic Rank Score over the eligible pool (0 = worst, 1 = best per component):
+Heuristic Rank Score over the whole scorable pool (0 = worst, 1 = best per component):
 
   QualityScore     = 1 - defect_rate            (bounded rate, used absolutely)
   CostScore        = 1 - MinMax(unit_cost)
@@ -49,7 +51,7 @@ from typing import Mapping
 import numpy as np
 import pandas as pd
 
-from backend.config import BUDGET_TOLERANCE, FIELD_PROVENANCE, HEURISTIC_WEIGHTS, TOP_N_SUPPLIER_CANDIDATES
+from backend.config import BUDGET_TOLERANCE, FIELD_PROVENANCE, HEURISTIC_WEIGHTS
 
 # Component name -> weight key. Ordered for display.
 COMPONENT_WEIGHTS = {
@@ -222,60 +224,82 @@ def order_budget(conn: sqlite3.Connection, sku_id: str, required_quantity: float
             "reference_unit_cost": round(ref, 4), "tolerance": BUDGET_TOLERANCE}
 
 
+def _unscorable_reasons(matrix: pd.DataFrame, ids: list[str]) -> list[dict]:
+    rows = []
+    for r in matrix[matrix["supplier_id"].isin(ids)].to_dict(orient="records"):
+        missing = [f for f in SCORING_FIELDS if f not in r or pd.isna(pd.to_numeric(pd.Series([r.get(f)]), errors="coerce").iloc[0])
+                   or not np.isfinite(pd.to_numeric(pd.Series([r.get(f)]), errors="coerce").iloc[0])]
+        rows.append({"supplier_id": r["supplier_id"], "status": "Not scorable", "missing_fields": missing,
+                     "reason": "missing or invalid scoring input: " + ", ".join(missing) + " (nothing is imputed, so no score is shown)"})
+    return rows
+
+
 def rank_suppliers(
     conn: sqlite3.Connection,
     sku_id: str,
     required_quantity: float = 0,
-    top_n: int | None = TOP_N_SUPPLIER_CANDIDATES,
+    top_n: int | None = None,
     weights: Mapping[str, float] | None = None,
     budget: float | None = None,
 ) -> dict:
+    """Score EVERY scorable supplier once (one pool, one Min-Max), sort by score, then derive:
+      scored_ranking   complete list, rank 1..n by heuristic score (capacity does not affect the order)
+      ranked_candidates / eligible_single   the subset able to supply the whole order alone, same
+                       order, each keeping its overall `rank` (`eligible_position` = place in this list)
+      ineligible_suppliers   scorable suppliers short of the full order (shortfall shown)
+      non_scorable     suppliers with missing inputs, with the reason; never scored
+    `top_n` is optional and limits only ranked_candidates; the default evaluates every eligible supplier."""
     weights = dict(weights or HEURISTIC_WEIGHTS)
     matrix = candidate_matrix(conn, sku_id)
     budget_info = order_budget(conn, sku_id, required_quantity, budget)
     scorable, unscorable = _coerce_scoring_inputs(matrix)
 
-    eligible = scorable[scorable["available_qty"] >= required_quantity]
-    ineligible = scorable[scorable["available_qty"] < required_quantity].sort_values("available_qty", ascending=False)
-
-    if eligible.empty:
-        candidates: list[dict] = []
-    else:
-        scored = score_candidates(eligible, weights).sort_values("raw_score", ascending=False).reset_index(drop=True)
+    ranking: list[dict] = []
+    if not scorable.empty:
+        scored = score_candidates(scorable, weights).sort_values("raw_score", ascending=False, kind="stable").reset_index(drop=True)
         scored["rank"] = scored.index + 1
-        candidates = _candidate_records(scored if top_n is None else scored.head(top_n), weights)
+        ranking = _candidate_records(scored, weights)
+    for rec in ranking:
+        ok = rec["available_qty"] >= required_quantity
+        rec["required_qty"] = required_quantity
+        rec["can_fulfil_full_order"] = bool(ok)
+        rec["fulfilment_ratio"] = round(rec["available_qty"] / required_quantity, 3) if required_quantity else None
+        rec["eligibility_status"] = "Eligible for full order" if ok else "Insufficient capacity for full order"
+        rec["eligibility_reason"] = (f"available {rec['available_qty']} >= required {int(required_quantity)}" if ok
+                                     else f"available {rec['available_qty']} < required {int(required_quantity)} (shortfall {int(required_quantity - rec['available_qty'])})")
+    eligible_records = [r for r in ranking if r["can_fulfil_full_order"]]
+    for i, rec in enumerate(eligible_records, 1):
+        rec["eligible_position"] = i
+    candidates = eligible_records if top_n is None else eligible_records[:top_n]
+    ineligible_records = sorted(({**r, "shortfall": int(required_quantity - r["available_qty"])} for r in ranking if not r["can_fulfil_full_order"]),
+                                key=lambda r: -r["available_qty"])
 
-    ineligible_records = [
-        {**_record(r), "shortfall": int(required_quantity - r["available_qty"])}
-        for r in ineligible.to_dict(orient="records")
-    ]
     combined = int(scorable["available_qty"].sum()) if not scorable.empty else 0
-    no_eligible = bool(len(scorable)) and eligible.empty and required_quantity > 0
+    no_eligible = bool(len(scorable)) and not eligible_records and required_quantity > 0
     split_possible = no_eligible and combined >= required_quantity
     # Even the whole pool together falls short: still plan what CAN be bought
     # (a partial order) instead of giving up, and report the shortfall.
     partial_possible = no_eligible and 0 < combined < required_quantity
 
-    # When no single supplier can cover the request, the whole scorable pool is
-    # ranked (scores relative to that pool) so the Knowledge Agent can allocate
-    # the order across suppliers. `ranked_candidates` stays empty: nobody is
-    # recommended as a *sole* supplier.
-    pool_candidates: list[dict] = []
-    if not scorable.empty:
-        pool_scored = score_candidates(scorable, weights).sort_values("raw_score", ascending=False).reset_index(drop=True)
-        pool_scored["rank"] = pool_scored.index + 1
-        pool_candidates = _candidate_records(pool_scored, weights)
+    # The multi-supplier search uses the FULL scorable pool (`pool_candidates`) in heuristic order.
+    pool_candidates = ranking
     split_candidates = pool_candidates if (split_possible or partial_possible) else []
+    non_scorable = _unscorable_reasons(matrix, unscorable)
 
     return {
         "agent": "Supplier Intelligence Agent",
         "sku_id": sku_id,
         "required_quantity": required_quantity,
         "pool_size": int(len(matrix)),
-        "eligible_count": int(len(eligible)),
-        "filtered_out_suppliers": ineligible["supplier_id"].tolist(),
+        "scorable_count": int(len(ranking)),
+        "eligible_count": int(len(eligible_records)),
+        "filtered_out_suppliers": [r["supplier_id"] for r in ineligible_records],
         "ineligible_suppliers": ineligible_records,
         "unscorable_suppliers": unscorable,
+        "non_scorable": non_scorable,
+        "scored_ranking": ranking,
+        "eligible_single": eligible_records,
+        "single_supplier_possible": bool(eligible_records),
         "no_eligible_supplier": no_eligible,
         "combined_available_qty": combined,
         # True when no single supplier can cover the request but the pool combined can.
@@ -285,7 +309,7 @@ def rank_suppliers(
         "partial_order_possible": partial_possible,
         "shortfall_qty": int(max(0, required_quantity - combined)) if partial_possible else 0,
         "split_candidates": split_candidates,
-        # the whole scorable pool, ranked against itself — input to the multi-supplier search
+        # the whole scorable pool, in heuristic order — input to the multi-supplier search
         "pool_candidates": pool_candidates,
         "ranked_candidates": candidates,
         "primary_supplier": candidates[0] if candidates else None,

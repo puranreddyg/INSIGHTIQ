@@ -271,6 +271,8 @@ def suppliers(sku_id: str, required_quantity: Optional[float] = Query(None, ge=0
             knowledge = knowledge_agent.run({"focus_facts": []}, result)
             result["decision"] = knowledge["decision"]
             result["review_reason"] = knowledge["review_reason"]
+            result["single_supplier_evaluation"] = knowledge["single_supplier_evaluation"]
+            result["search_trace"] = knowledge["search_trace"]
             if knowledge["split_order"]:
                 plan = planning_agent.build_split_plan(
                     conn, fact, knowledge["allocations"], knowledge["backup_candidates"],

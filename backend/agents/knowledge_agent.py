@@ -303,7 +303,7 @@ def _risky_ids(candidates: list[dict]) -> tuple[set[str], dict[str, str]]:
 
 
 def allocate_split_order(candidates: list[dict], required_quantity: float, trace: list[dict],
-                         budget: float | None = None) -> tuple[list[dict], list[dict], int]:
+                         budget: float | None = None, out: dict | None = None) -> tuple[list[dict], list[dict], int]:
     """Rule 6 (Multi-supplier order) — hybrid heuristic search (procurement_search.py).
 
       R6  IF no single supplier meets capacity, quality AND budget
@@ -325,6 +325,8 @@ def allocate_split_order(candidates: list[dict], required_quantity: float, trace
         result = procurement_search.search(candidates, required, risky, budget)
     else:
         result = procurement_search.partial(candidates, required, risky, budget)
+    if out is not None:
+        out["search_result"] = result
     status = result["status"]
     plan_shares = result["shares"]
     chosen_ids = {c["supplier_id"] for c, _ in plan_shares}
@@ -397,6 +399,71 @@ def _budget_rule(c: dict, required: float, budget: float | None, trace: list[dic
     return ok
 
 
+def _rule_step(entry: dict) -> dict:
+    """Compact, UI-ready view of one rule firing (from the trace entry the rule itself wrote)."""
+    return {"rule_id": f"R{entry['ruleId']}", "rule_name": entry["name"], "if": entry.get("ifText"), "then": entry.get("thenText"),
+            "inputs": {c["label"]: c["value"] for c in entry["conditions"]},
+            "conditions": [{k: c[k] for k in ("label", "value", "operator", "threshold", "result", "expression")} for c in entry["conditions"]],
+            "logic": entry.get("logic"), "result": "MATCHED" if entry["matched"] else "NOT MATCHED", "outcome": entry.get("outcome")}
+
+
+def _evaluate_eligible_in_order(eligible: list[dict], required: float, budget: float | None, trace: list[dict]) -> tuple[list[dict], dict | None, list[dict]]:
+    """Evaluate the suppliers able to supply the full order ONE BY ONE in heuristic order and stop
+    selecting at the first that passes the risk gate (not High Risk) and the budget gate (R7).
+    Each supplier's facts, R5/R2/R3/R4 firings, status and R7 are written to the trace together,
+    so every rule is attached to the supplier it was evaluated for. Suppliers ranked after the
+    selected one are still annotated (phase `backup_evaluation`) because the plan lists backups,
+    but they play no part in the selection."""
+    annotated: list[dict] = []
+    evaluations: list[dict] = []
+    selected: dict | None = None
+    for step, cand in enumerate(eligible, start=1):
+        phase = "selection" if selected is None else "backup_evaluation"
+        start = len(trace)
+        ann = evaluate_supplier(cand, required, trace)
+        budget_ok = _budget_rule(ann, required, budget, trace) if required else True
+        for e in trace[start:]:
+            e["phase"], e["evalStep"] = phase, step
+        rules = [_rule_step(e) for e in trace[start:] if e["type"] == "rule"]
+        status = ann["supplier_status"]
+        risk_ok = status != "High Risk"
+        cost = round(float(required) * float(ann.get("unit_cost") or 0), 2) if required else 0.0
+        budget_on = budget is not None and bool(required)
+        reasons = []
+        if not risk_ok:
+            reasons.append(f"High Risk: predicted defect rate {float(ann.get('defect_rate')):.4f} > {RULE_HIGH_RISK_DEFECT_RATE} "
+                           f"with {int(ann.get('evidence_pos') or 0)} purchase orders of evidence (>= {RULE_MIN_EVIDENCE_POS})")
+        if not budget_ok:
+            reasons.append(f"Over budget: order cost {cost:,.2f} > budget {budget:,.2f}")
+        accepted = risk_ok and budget_ok
+        budget_detail = (f"order cost {cost:,.2f} {'<=' if budget_ok else '>'} budget {budget:,.2f}" if budget_on else "no budget limit set")
+        gates = [
+            {"gate": "Capacity (R5)", "result": "PASS", "detail": f"available {ann['available_qty']} >= required {int(required)}"},
+            {"gate": "Risk (R3)", "result": "PASS" if risk_ok else "FAIL",
+             "detail": f"status {status}" + ("" if risk_ok else " — High Risk is never selected as a sole supplier")},
+            {"gate": "Budget (R7)", "result": ("PASS" if budget_ok else "FAIL") if budget_on else "NOT APPLICABLE", "detail": budget_detail},
+        ]
+        rec = {"step": step, "phase": phase, "supplier_id": ann["supplier_id"], "rank": ann.get("rank"), "heuristic_score": ann.get("heuristic_score"),
+               "available_qty": ann.get("available_qty"), "unit_cost": ann.get("unit_cost"), "order_cost": cost, "defect_rate": ann.get("defect_rate"),
+               "evidence_pos": int(ann.get("evidence_pos") or 0), "status": status, "status_flags": ann.get("status_flags"),
+               "rules": rules, "gates": gates, "accepted": accepted, "reasons": reasons}
+        if phase == "selection":
+            if accepted:
+                selected = ann
+                rec["outcome"], rec["flow"] = "SELECTED", "STOP — first eligible supplier passing the risk and budget checks"
+                tail = f" and costs {cost:,.2f} within the budget of {budget:,.2f}." if budget_on else "."
+                rec["decision_reason"] = f"{ann['supplier_id']} (rank {ann.get('rank')}) can supply the full order, is {status} (not High Risk){tail}"
+            else:
+                rec["outcome"], rec["flow"] = "REJECTED", "CONTINUE — evaluate the next eligible supplier"
+                rec["decision_reason"] = f"{ann['supplier_id']} rejected: " + "; ".join(reasons) + "."
+        else:
+            rec["outcome"], rec["flow"] = "NOT NEEDED FOR SELECTION", "Selection already made; evaluated only to list backup suppliers"
+            rec["decision_reason"] = "Would also pass the checks." if accepted else "Would not pass the checks: " + "; ".join(reasons) + "."
+        evaluations.append(rec)
+        annotated.append(ann)
+    return annotated, selected, evaluations
+
+
 def run(perception_result: dict, supplier_result: dict) -> dict:
     trace: list[dict] = []
 
@@ -408,9 +475,14 @@ def run(perception_result: dict, supplier_result: dict) -> dict:
     required = supplier_result.get("required_quantity", 0)
     budget = supplier_result.get("budget")
     pool = supplier_result.get("pool_candidates") or supplier_result.get("split_candidates") or []
+    eligible = supplier_result.get("ranked_candidates", [])
 
-    annotated_candidates = [evaluate_supplier(c, required, trace) for c in supplier_result.get("ranked_candidates", [])]
+    # Steps 5-8: chronological evaluation of the eligible single suppliers, heuristic order, stop at the first pass.
+    annotated_candidates, recommended, evaluations = _evaluate_eligible_in_order(eligible, required, budget, trace)
+    ineligible_start = len(trace)
     ineligible_candidates = [evaluate_supplier(c, required, trace) for c in supplier_result.get("ineligible_suppliers", [])]
+    for e in trace[ineligible_start:]:
+        e["phase"] = "capacity_screen"
 
     allocations: list[dict] = []
     backup_candidates: list[dict] = []
@@ -419,19 +491,44 @@ def run(perception_result: dict, supplier_result: dict) -> dict:
     decision = "no_action"
     review_reason = None
     quality_ok = budget_ok = True
-    recommended = None
+    search_out: dict = {}
 
-    if annotated_candidates:
-        # a single supplier is chosen only if it meets capacity (R5), quality (not High Risk) AND budget (R7)
-        within = {c["supplier_id"]: (_budget_rule(c, required, budget, trace) if required else True)
-                  for c in annotated_candidates}
-        recommended = next((c for c in annotated_candidates
-                            if c["supplier_status"] != "High Risk" and within[c["supplier_id"]]), None)
-        if recommended is not None:
-            decision = "single" if required else "no_action"  # nothing to buy: the pick is informational only
+    ranking = supplier_result.get("scored_ranking") or pool
+    eligible_ids = {c["supplier_id"] for c in eligible}
+    eval_block = {
+        "required_quantity": required, "budget": budget,
+        "complete_ranking": [{"rank": c.get("rank"), "supplier_id": c["supplier_id"], "heuristic_score": c.get("heuristic_score"),
+                              "available_qty": c.get("available_qty"), "eligible": c["supplier_id"] in eligible_ids} for c in ranking],
+        "eligible_list": [{"rank": c.get("rank"), "supplier_id": c["supplier_id"], "heuristic_score": c.get("heuristic_score"),
+                           "available_qty": c.get("available_qty")} for c in eligible],
+        "capacity_ineligible": [c["supplier_id"] for c in supplier_result.get("ineligible_suppliers", [])],
+        "eligible_empty_message": None if eligible else "No supplier has sufficient capacity to fulfil the complete order individually.",
+        "evaluations": evaluations, "selected_supplier_id": recommended["supplier_id"] if recommended else None,
+        "result_legend": "Rules R2-R4 report MATCHED / NOT MATCHED (did the rule fire); the capacity, risk and budget gates report PASS / FAIL.",
+        "case": None, "headline": None, "reasons": [], "transition_message": None,
+    }
+
+    if recommended is not None:
+        decision = "single" if required else "no_action"  # nothing to buy: the pick is informational only
+        eval_block["case"] = "SELECTED" if required else "NO_REQUIREMENT"
+        eval_block["headline"] = f"Single supplier selected: {recommended['supplier_id']}." if required else "No quantity is required."
+    elif required and eligible:
+        eval_block["case"] = "B"
+        eval_block["headline"] = "NO ACCEPTABLE SINGLE-SUPPLIER SOLUTION: Suppliers were available, but none satisfied all required selection constraints."
+        eval_block["reasons"] = [f"{e['supplier_id']} (rank {e['rank']}): " + "; ".join(e["reasons"]) for e in evaluations if not e["accepted"]]
+    elif required and pool:
+        eval_block["case"] = "A"
+        eval_block["headline"] = "NO SINGLE-SUPPLIER SOLUTION: None of the suppliers has enough available capacity to fulfil the complete required quantity individually."
+        eval_block["reasons"] = [f"{c['supplier_id']} (rank {c.get('rank')}): available {c['available_qty']} < required {int(required)} "
+                                 f"(shortfall {int(required - c['available_qty'])})" for c in supplier_result.get("ineligible_suppliers", [])]
+    if eval_block["case"] in ("A", "B"):
+        trace.append({**_decision_entry(None, None, eval_block["headline"], f"✓ Decision Made → {eval_block['headline']}"), "phase": "single_supplier_outcome"})
 
     if required and recommended is None and pool:
-        allocations, backup_candidates, shortfall = allocate_split_order(pool, required, trace, budget)
+        eval_block["transition_message"] = "Starting multi-supplier allocation because no valid single-supplier solution was found."
+        trace.append({**_decision_entry(None, None, eval_block["transition_message"], f"✓ Decision Made → {eval_block['transition_message']}"),
+                      "phase": "single_supplier_outcome"})
+        allocations, backup_candidates, shortfall = allocate_split_order(pool, required, trace, budget, out=search_out)
         if allocations:
             split_mode = True
             decision = "partial" if shortfall else "split"
@@ -471,6 +568,7 @@ def run(perception_result: dict, supplier_result: dict) -> dict:
         srch = allocations[0].get("search", {})
         quality_ok, budget_ok = bool(srch.get("meets_quality", True)), bool(srch.get("meets_budget", True))
 
+    search_trace = (search_out.get("search_result") or {}).get("trace")
     preferred = [c for c in annotated_candidates if c["supplier_status"] == "Preferred"]
     high_risk = [c for c in annotated_candidates if c["supplier_status"] == "High Risk"]
 
@@ -489,6 +587,8 @@ def run(perception_result: dict, supplier_result: dict) -> dict:
         "preferred_suppliers": preferred,
         "high_risk_suppliers": high_risk,
         "recommended_supplier": recommended,
+        "single_supplier_evaluation": eval_block,
+        "search_trace": search_trace,
         "budget": budget,
         "quality_constraint_met": quality_ok,
         "budget_constraint_met": budget_ok,

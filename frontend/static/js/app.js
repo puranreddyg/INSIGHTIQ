@@ -718,7 +718,12 @@ function renderPipelineResult(result) {
         ${renderXaiPanel()}
       </div>
     </div>
+    <div class="space-y-5 mt-5">
+      ${singleEvaluationHtml(result.knowledge.single_supplier_evaluation)}
+      ${result.knowledge.search_trace ? searchTraceHtml(result.knowledge.search_trace, "No single supplier can fulfil the full order. Multi-supplier allocation has started.") : ""}
+    </div>
   `;
+  bindWorkflowViews(container);
 
   document.getElementById("go-to-action")?.addEventListener("click", () => switchView("action"));
   initXaiPlayer(result);
@@ -777,6 +782,7 @@ function buildXaiBlocks(trace) {
         entity: item.entity,
         entityKind: item.entityKind || xaiEntityKind(item.entity),
         values: item.values || {},
+        phase: item.phase || null,
         rules: [],
         decision: null,
       };
@@ -1198,7 +1204,9 @@ function initXaiPlayer(result) {
 
   const recommendedId = result?.knowledge?.recommended_supplier?.supplier_id ?? null;
   const skuBlocks = blocks.filter((b) => b.entityKind === "sku");
-  const primarySupplier = blocks.find((b) => b.entityKind === "supplier" && b.entity === recommendedId);
+  // A supplier can appear twice (capacity screen, then its allocated share): feature the block that
+  // produced the selection — the last one for that supplier that is not a capacity-screen block.
+  const primarySupplier = [...blocks].reverse().find((b) => b.entityKind === "supplier" && b.entity === recommendedId && b.phase !== "capacity_screen");
   const otherSuppliers = blocks.filter((b) => b.entityKind === "supplier" && b !== primarySupplier);
   const primaryBlocks = primarySupplier ? [...skuBlocks, primarySupplier] : skuBlocks;
 
@@ -1207,7 +1215,7 @@ function initXaiPlayer(result) {
   let timelineHtml = html;
   if (otherSuppliers.length) {
     timelineHtml += `
-      <div class="xai-secondary-head"><h3>Other Suppliers Evaluated (${otherSuppliers.length})</h3></div>
+      <div class="xai-secondary-head"><h3>Other Suppliers Evaluated (${otherSuppliers.length}) — the animated walkthrough above shows the currently selected supplier, not the first one evaluated</h3></div>
       ${otherSuppliers.map(renderXaiStaticBlock).join("")}
     `;
   }
@@ -1287,7 +1295,7 @@ function renderSuppliersView(data) {
       <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 class="page-title">Heuristic Supplier Decision Matrix — ${esc(data.sku_id)}</h1>
-          <p class="text-sm text-body mt-1">H = ${pct("quality")}%·Quality + ${pct("cost")}%·Cost + ${pct("fulfillment")}%·Fulfillment + ${pct("delivery")}%·Delivery — Cost and Delivery are Min-Max normalized across eligible suppliers; Quality (1 − defect rate) and Fulfillment are used as absolute rates</p>
+          <p class="text-sm text-body mt-1">H = ${pct("quality")}%·Quality + ${pct("cost")}%·Cost + ${pct("fulfillment")}%·Fulfillment + ${pct("delivery")}%·Delivery — Cost and Delivery are Min-Max normalized across all scorable suppliers; Quality (1 − defect rate) and Fulfillment are used as absolute rates</p>
           <p class="text-xs text-muted mt-1">Only suppliers that actually supply this SKU in the supply-chain data are candidates. ${aiBadge()} = learned by the supplier model from 5,027 semi-synthetic purchase-order outcomes — simulated from real KPI ranges, not real supplier records (defect rate, on-time-in-full, lead time = promised + predicted delay). ${estBadge()} = capacity: the largest quantity the supplier has delivered for this SKU. Unit cost is real.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -1298,9 +1306,11 @@ function renderSuppliersView(data) {
         </div>
       </div>
 
+      ${rankingSectionAHtml(data)}
+
       ${rows.length ? `
       <div class="card p-5">
-        <h2 class="font-semibold text-heading mb-3">Heuristic Score by Eligible Supplier</h2>
+        <h2 class="font-semibold text-heading mb-3">Section B — Heuristic Score by Eligible Supplier (can supply the full order alone)</h2>
         <div class="h-64"><canvas id="chart-heuristic"></canvas></div>
       </div>
 
@@ -1311,6 +1321,10 @@ function renderSuppliersView(data) {
       </div>
 
       <div class="card p-0 overflow-hidden">
+        <div class="px-5 py-4 border-b border-soft">
+          <h2 class="font-semibold text-heading">Section B — Eligible single-supplier candidates (${rows.length})</h2>
+          <p class="text-xs text-body">The suppliers from Section A able to cover the full quantity, in the same order and with the same overall rank. These are the suppliers evaluated one by one below.</p>
+        </div>
         <div class="overflow-x-auto">
           <table class="table-clean w-full">
             <thead><tr>
@@ -1322,7 +1336,8 @@ function renderSuppliersView(data) {
         </div>
       </div>` : `
       <div class="card p-6 text-sm">
-        <div class="font-semibold text-danger">No eligible supplier for ${fmtNum(data.required_quantity)} units</div>
+        <h2 class="font-semibold text-heading mb-1">Section B — Eligible single-supplier candidates (0)</h2>
+        <div class="font-semibold text-danger">No supplier has sufficient capacity to fulfil the complete order individually.</div>
         <p class="text-body mt-1">Combined availability across all ${data.pool_size} candidates is ${fmtNum(data.combined_available_qty)} units${estBadge()}. ${data.split_order_possible ? "No single supplier can cover it, but together they can — the multi-supplier plan is shown below." : data.partial_order_possible ? `Even all suppliers together fall ${fmtNum(data.shortfall_qty)} units short — a partial order from all of them is planned below, with the shortfall.` : "No supplier has any known capacity for this SKU."}</p>
       </div>`}
 
@@ -1338,29 +1353,14 @@ function renderSuppliersView(data) {
       <div class="card p-5 text-sm"><div class="font-semibold text-danger">Needs manual review</div>
         <p class="text-body mt-1">${esc(data.review_reason || "No supplier plan meets the constraints.")}</p></div>` : ""}
 
-      ${data.ineligible_suppliers.length ? `
-      <div class="card p-0 overflow-hidden">
-        <div class="px-5 py-4 border-b border-soft">
-          <h2 class="font-semibold text-heading">Excluded — cannot supply ${fmtNum(data.required_quantity)} units</h2>
-          <p class="text-xs text-body">Not scored: Rule 5 (AvailableQty ≥ RequiredQty) failed.</p>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="table-clean w-full">
-            <thead><tr><th>Supplier</th><th>Available${estBadge()}</th><th>Shortfall</th><th>Unit Cost</th><th>Lead Time (d)</th><th>Warehouses</th></tr></thead>
-            <tbody>${data.ineligible_suppliers.map((s) => `
-              <tr>
-                <td class="font-medium text-heading">${esc(s.supplier_id)}</td>
-                <td class="tabular">${fmtNum(s.available_qty)}</td>
-                <td class="tabular text-danger">${fmtNum(s.shortfall)}</td>
-                <td class="tabular">${fmtCurrency(s.unit_cost)}</td>
-                <td class="tabular">${fmtDays(s.lead_time_days)}</td>
-                <td class="text-body">${esc(s.warehouses)}</td>
-              </tr>`).join("")}</tbody>
-          </table>
-        </div>
-      </div>` : ""}
+      ${nonScorableHtml(data)}
+
+      ${singleEvaluationHtml(data.single_supplier_evaluation)}
+
+      ${data.search_trace ? searchTraceHtml(data.search_trace, data.single_supplier_evaluation?.transition_message ? "No single supplier can fulfil the full order. Multi-supplier allocation has started." : null) : ""}
     </div>
   `;
+  bindWorkflowViews(root);
 
   const reload = async (sku, qty) => {
     try {
